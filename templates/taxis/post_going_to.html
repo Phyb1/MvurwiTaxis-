@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Post Going-To{% endblock %}
+{% block content %}
+<h1>Post a "Going To"</h1>
+<p>Shows on the homepage banner for 24 hours. Free tier: 1/month. Pro: unlimited.</p>
+<form class="stack" method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Post</button>
+</form>
+{% endblock %}

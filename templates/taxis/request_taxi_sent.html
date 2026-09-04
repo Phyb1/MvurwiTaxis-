@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Request Sent{% endblock %}
+{% block content %}
+<h1>Request sent</h1>
+<p>Your request from {{ lead.pickup }} to {{ lead.destination }} has been sent to available drivers. A driver will WhatsApp or call you shortly.</p>
+<p><a href="{% url 'taxis:home' %}">&larr; Back to directory</a></p>
+{% endblock %}

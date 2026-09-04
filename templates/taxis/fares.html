@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Official Fares{% endblock %}
+{% block content %}
+<h1>Official Fare Board</h1>
+<p>Updated by MvurwiTaxis admin. This is the reference price for Mvurwi routes.</p>
+<table class="fare-table">
+    <tr><th>Route</th><th>Price</th><th>Notes</th></tr>
+    {% for fare in fares %}
+    <tr>
+        <td>{{ fare.origin }} &rarr; {{ fare.destination }}</td>
+        <td>${{ fare.price_usd }}</td>
+        <td>{{ fare.notes }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="3">Fares coming soon.</td></tr>
+    {% endfor %}
+</table>
+{% endblock %}

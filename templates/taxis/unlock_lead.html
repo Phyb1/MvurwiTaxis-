@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Unlock Lead{% endblock %}
+{% block content %}
+<h1>Unlock this lead &mdash; ${{ amount }}</h1>
+<div class="lead-card">
+    <p>{{ lead.pickup }} &rarr; {{ lead.destination }} &middot; {{ lead.people }} people &middot; {{ lead.requested_time }}</p>
+</div>
+<p>Pay via EcoCash to <strong>{{ ecocash_merchant_number }}</strong>, then submit your reference or a screenshot below. Paynow is available as a fallback.</p>
+<form class="stack" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">I've paid &mdash; submit</button>
+</form>
+{% endblock %}

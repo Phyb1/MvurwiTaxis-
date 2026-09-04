@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Go Pro{% endblock %}
+{% block content %}
+<h1>Go Pro</h1>
+<p>Weekly: ${{ weekly_price }} &middot; Monthly: ${{ monthly_price }}. Unlimited leads, Verified Pro badge, top placement, analytics.</p>
+<p>Pay via EcoCash to <strong>{{ ecocash_merchant_number }}</strong>, then submit proof below.</p>
+<form class="stack" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <label><input type="radio" name="plan" value="weekly" checked> Weekly (${{ weekly_price }})</label>
+    <label><input type="radio" name="plan" value="monthly"> Monthly (${{ monthly_price }})</label>
+    {{ form.as_p }}
+    <button type="submit">I've paid &mdash; submit</button>
+</form>
+{% endblock %}

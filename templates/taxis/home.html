@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Find a Taxi{% endblock %}
+{% block content %}
+<h1>Taxis available in Mvurwi</h1>
+<p><a href="{% url 'taxis:request_taxi' %}" class="btn-wa" style="display:inline-block;width:auto;">Request Any Taxi &rarr;</a></p>
+
+{% if going_to_posts %}
+<div class="going-to-banner">
+    {% for post in going_to_posts %}
+    <div class="going-to-card">
+        <strong>{{ post.driver.full_name }}</strong> going to <strong>{{ post.destination }}</strong><br>
+        {{ post.departure_text }} &middot; {{ post.seats_available }} seats &middot; ${{ post.price_usd }}
+        <br><a href="{% url 'taxis:driver_profile' post.driver.slug %}">View profile</a>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<form class="filters" method="get">
+    <input type="text" name="destination" placeholder="Destination" value="{{ filters.destination }}">
+    <select name="car_type">
+        <option value="">Any car</option>
+        {% for value, label in car_types %}
+        <option value="{{ value }}" {% if filters.car_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <input type="number" name="seats" placeholder="Min seats" value="{{ filters.seats }}" min="1">
+    <label><input type="checkbox" name="online_only" value="1" {% if filters.online_only %}checked{% endif %}> Available now</label>
+    <button type="submit">Filter</button>
+</form>
+
+<div class="driver-grid">
+    {% for driver in drivers %}
+    <div class="driver-card">
+        {% if driver.is_pro %}<span class="badge">PRO</span>{% endif %}
+        {% if driver.is_verified %}<span class="badge">VERIFIED</span>{% endif %}
+        <h3>{{ driver.full_name }}</h3>
+        <p>{{ driver.get_car_type_display }} &middot; {{ driver.car_reg }} &middot; {{ driver.seats }} seats</p>
+        {% if driver.average_rating %}<p>&#9733; {{ driver.average_rating }}</p>{% endif %}
+        <p>
+            {% if driver.is_online %}
+            <span class="status-online">&#9679; Available now</span>
+            {% else %}
+            <span class="status-offline">&#9679; Offline</span>
+            {% endif %}
+        </p>
+        <a class="btn-wa" href="{{ driver.whatsapp_link }}" target="_blank" rel="noopener">WhatsApp {{ driver.full_name|first }}</a>
+        <a href="{% url 'taxis:driver_profile' driver.slug %}">View profile</a>
+    </div>
+    {% empty %}
+    <p>No taxis match those filters right now. Try <a href="{% url 'taxis:request_taxi' %}">requesting any taxi</a> instead.</p>
+    {% endfor %}
+</div>
+{% endblock %}
