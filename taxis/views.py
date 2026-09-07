@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
@@ -19,7 +20,7 @@ from taxis.forms import (
     RequestTaxiForm,
     ReviewForm,
 )
-from taxis.models import CarType, Driver, Fare, GoingToPost, Lead, Payment
+from taxis.models import CarType, Driver, FAQ, Fare, GoingToPost, Lead, Payment
 from taxis.utils.whatsapp import build_wa_link, hail_message, share_profile_message
 
 
@@ -118,7 +119,7 @@ def request_taxi_sent(request, lead_id):
 
 def driver_signup(request):
     if request.method == "POST":
-        form = DriverSignupForm(request.POST)
+        form = DriverSignupForm(request.POST, request.FILES)
         if form.is_valid():
             driver = form.save()
             auth_login(request, driver.user)
@@ -226,8 +227,35 @@ def unlock_lead(request, lead_id):
         "lead": lead,
         "amount": settings.HOT_LEAD_PRICE_USD,
         "ecocash_merchant_number": settings.ECOCASH_MERCHANT_NUMBER,
+        "ecocash_merchant_name": settings.ECOCASH_MERCHANT_NAME,
+        "paynow_enabled": settings.PAYNOW_ENABLED,
     }
     return render(request, "taxis/unlock_lead.html", context)
+
+
+@login_required
+def claim_lead_pro(request, lead_id):
+    """Pro drivers unlock leads for free — no EcoCash step, no admin
+    confirmation needed. This is the main way manual involvement in lead
+    processing is minimised; see taxis/signals.py for the matching
+    notification half of the flow."""
+    driver = request.user.driver
+    lead = get_object_or_404(Lead, id=lead_id, kind=Lead.Kind.HOT)
+
+    if not driver.is_pro:
+        messages.warning(request, "Claiming leads for free is a Pro feature.")
+        return redirect("taxis:driver_dashboard")
+
+    if not lead.is_open_for_unlock():
+        messages.warning(request, "This lead has already been taken.")
+        return redirect("taxis:driver_dashboard")
+
+    lead.status = Lead.Status.UNLOCKED
+    lead.unlocked_by = driver
+    lead.unlocked_at = timezone.now()
+    lead.save(update_fields=["status", "unlocked_by", "unlocked_at"])
+    messages.success(request, "Lead claimed — the passenger's number is on your dashboard.")
+    return redirect("taxis:driver_dashboard")
 
 
 @login_required
@@ -256,6 +284,8 @@ def go_pro(request):
         "weekly_price": settings.PRO_WEEKLY_PRICE_USD,
         "monthly_price": settings.PRO_MONTHLY_PRICE_USD,
         "ecocash_merchant_number": settings.ECOCASH_MERCHANT_NUMBER,
+        "ecocash_merchant_name": settings.ECOCASH_MERCHANT_NAME,
+        "paynow_enabled": settings.PAYNOW_ENABLED,
     }
     return render(request, "taxis/go_pro.html", context)
 
@@ -283,3 +313,33 @@ def post_going_to(request):
     else:
         form = GoingToForm()
     return render(request, "taxis/post_going_to.html", {"form": form})
+
+
+@staff_member_required
+def admin_leads_dashboard(request):
+    """Operational view of the thing admin actually has to babysit: open
+    hot leads, pending manual EcoCash payments, and how much lead volume
+    Pro drivers are already absorbing for free (the metric that shows
+    whether 'minimise manual involvement' is working)."""
+    now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    context = {
+        "open_hot_leads": Lead.objects.filter(kind=Lead.Kind.HOT, status=Lead.Status.OPEN).order_by("-created_at"),
+        "pending_payments": Payment.objects.filter(status=Payment.Status.PENDING).select_related("driver"),
+        "unlocked_today": Lead.objects.filter(status=Lead.Status.UNLOCKED, unlocked_at__gte=today_start).count(),
+        "pro_claims_today": Lead.objects.filter(
+            status=Lead.Status.UNLOCKED, unlocked_at__gte=today_start, unlocked_by__pro_until__gt=now
+        ).count(),
+        "active_pro_drivers": Driver.objects.filter(pro_until__gt=now).count(),
+        "online_drivers": [d for d in Driver.objects.filter(is_active_listing=True) if d.is_online],
+    }
+    return render(request, "admin/leads_dashboard.html", context)
+
+
+def faqs(request):
+    audience = request.GET.get("for", "").strip()
+    faq_list = FAQ.objects.filter(is_published=True)
+    if audience in (FAQ.Audience.PASSENGER, FAQ.Audience.DRIVER):
+        faq_list = faq_list.filter(audience__in=[audience, FAQ.Audience.BOTH])
+    return render(request, "taxis/faqs.html", {"faqs": faq_list, "audience": audience})

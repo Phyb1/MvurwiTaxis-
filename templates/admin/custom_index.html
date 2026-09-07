@@ -1,0 +1,9 @@
+{% extends "admin/index.html" %}
+{% block content %}
+<div style="margin-bottom:1rem;padding:0.75rem 1rem;background:#161616;border:1px solid #262626;border-radius:8px;">
+    <a href="{% url 'admin_leads_dashboard' %}" style="color:#c8f04d;font-weight:700;">
+        &rarr; Leads &amp; Payments Dashboard
+    </a>
+</div>
+{{ block.super }}
+{% endblock %}

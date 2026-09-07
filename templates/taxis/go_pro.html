@@ -1,14 +1,27 @@
 {% extends "base.html" %}
+{% load crispy_forms_tags %}
 {% block title %}Go Pro{% endblock %}
 {% block content %}
 <h1>Go Pro</h1>
-<p>Weekly: ${{ weekly_price }} &middot; Monthly: ${{ monthly_price }}. Unlimited leads, Verified Pro badge, top placement, analytics.</p>
-<p>Pay via EcoCash to <strong>{{ ecocash_merchant_number }}</strong>, then submit proof below.</p>
-<form class="stack" method="post" enctype="multipart/form-data">
+<p>Weekly: ${{ weekly_price }} &middot; Monthly: ${{ monthly_price }}. Unlimited leads, free lead claiming, Verified Pro badge, top placement, analytics.</p>
+
+<div id="ecocash-instructions">
+    <p>Pay via EcoCash to <strong>{{ ecocash_merchant_number }}</strong> ({{ ecocash_merchant_name }}), then submit proof below.</p>
+</div>
+{% if paynow_enabled %}
+<div id="paynow-instructions" style="display:none;">
+    <p>You'll be redirected to Paynow to complete this payment securely — no need to submit a reference.</p>
+    <a href="#" class="btn" id="paynow-pay-link">Pay with Paynow &rarr;</a>
+</div>
+{% endif %}
+
+<form class="stack" method="post" enctype="multipart/form-data" id="payment-form">
     {% csrf_token %}
+    <label class="form-label">Plan</label>
     <label><input type="radio" name="plan" value="weekly" checked> Weekly (${{ weekly_price }})</label>
     <label><input type="radio" name="plan" value="monthly"> Monthly (${{ monthly_price }})</label>
-    {{ form.as_p }}
+    {{ form|crispy }}
     <button type="submit">I've paid &mdash; submit</button>
 </form>
+{% if paynow_enabled %}{% include "taxis/_payment_method_toggle.html" %}{% endif %}
 {% endblock %}

@@ -23,9 +23,19 @@ class Driver(models.Model):
     slug = models.SlugField(max_length=80, unique=True, blank=True)
     full_name = models.CharField(max_length=120)
     phone_number = models.CharField(
-        max_length=20, help_text="Format: 263775000000 (no +, no leading 0)"
+        max_length=20,
+        help_text="Your phone number, used to log in (e.g. 0775123456). "
+                   "This is stored as your username — passengers never see it directly; "
+                   "they reach you through the WhatsApp button.",
     )
-    photo = models.ImageField(upload_to="drivers/photos/", blank=True, null=True)
+    email = models.EmailField(
+        blank=True,
+        help_text="Optional, but needed if you ever want to reset your password by email.",
+    )
+    photo = models.ImageField(
+        upload_to="drivers/photos/", blank=True, null=True,
+        help_text="A clear photo of your car. Listings with a photo get more clicks.",
+    )
     car_type = models.CharField(max_length=20, choices=CarType.choices, default=CarType.HIACE)
     car_reg = models.CharField(max_length=20)
     seats = models.PositiveSmallIntegerField(default=4)
@@ -293,3 +303,24 @@ class Review(models.Model):
 
     def __str__(self):
         return f"{self.driver} - {self.rating}*"
+
+
+class FAQ(models.Model):
+    class Audience(models.TextChoices):
+        PASSENGER = "passenger", "Passenger"
+        DRIVER = "driver", "Driver"
+        BOTH = "both", "Both"
+
+    question = models.CharField(max_length=200)
+    answer = models.TextField()
+    audience = models.CharField(max_length=10, choices=Audience.choices, default=Audience.BOTH)
+    order = models.PositiveSmallIntegerField(default=0)
+    is_published = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["order", "question"]
+        verbose_name = "FAQ"
+        verbose_name_plural = "FAQs"
+
+    def __str__(self):
+        return self.question

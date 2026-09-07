@@ -17,11 +17,23 @@ Django to fix this; the pin above already targets the right line.
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # edit SECRET_KEY, ALLOWED_HOSTS, EcoCash number
+cp .env.example .env          # edit SECRET_KEY, ALLOWED_HOSTS, EcoCash number/name
+python manage.py makemigrations taxis   # migrations aren't committed — generate them locally first
 python manage.py migrate
 python manage.py createsuperuser
+python manage.py seed_faqs    # optional: adds starter FAQ content
 python manage.py runserver
 ```
+
+`manage.py` defaults to `mvurwitaxis.settings.dev` (debug toolbar on,
+console email backend, no collectstatic required). Production entry
+points (`wsgi.py`, `passenger_wsgi.py`) default to `mvurwitaxis.settings.prod`.
+Override either with `DJANGO_SETTINGS_MODULE` if needed.
+
+> **Migrations are not committed.** They were hand-written models in a
+> sandbox with no Django installed, so I couldn't generate real migration
+> files — running `makemigrations` yourself the first time is required,
+> not optional. After that, commit the generated files as normal.
 
 ## Running tests
 
@@ -72,11 +84,49 @@ and the admin bulk-confirm-payments action.
 ## What's not built yet (flag for next revision)
 
 - Paynow automated integration (fields are stubbed in `.env.example`/settings
-  only).
-- Push-style lead alerts beyond dashboard polling (e.g. WhatsApp Business
-  API webhook) — deferred per the "no SMS dependency" decision above.
-- PWA icons (`static/img/icon-192.png`, `icon-512.png`) are referenced in
-  `manifest.json` but not included — drop in real PNGs before shipping.
+  only; the UI toggles correctly but there's no real redirect/webhook yet —
+  `PAYNOW_ENABLED` defaults to `False` so the option stays hidden until it is).
 - Analytics view (profile views / WhatsApp clicks tracking) from the spec's
   Week 3 scope — models support it (`Lead.driver_profile_viewed`) but there's
   no aggregation view/template yet.
+- crispy-forms is wired in with the `bootstrap5` pack + custom dark-theme CSS
+  overrides (`.form-control`, `.form-label`, etc. in `style.css`) rather than
+  a hand-built template pack matching every design-system detail — functional
+  and on-brand, but worth a visual pass if it needs to match pixel-for-pixel.
+- PWA icons (`static/img/icon-192.png`, `icon-512.png`) are referenced in
+  `manifest.json` but not included — drop in real PNGs before shipping.
+
+## Recent additions (this revision)
+
+- **Settings split**: `mvurwitaxis/settings/{base,dev,prod}.py`. Dev uses
+  plain static storage (no collectstatic needed for tests or local dev);
+  prod uses WhiteNoise's manifest storage. `debug_toolbar` is dev-only.
+- **Auth**: signup now captures email (optional) + car photo; full password
+  reset/change flow via Django's built-in views with dark-themed templates
+  in `templates/registration/`.
+- **Pro drivers claim hot leads for free** — no EcoCash step, no admin
+  confirmation (`taxis:claim_lead_pro`). This is the main lever for cutting
+  manual payment-confirmation volume; free-tier drivers still go through
+  manual EcoCash confirmation since there's no live gateway API.
+- **Email notification to Pro drivers** the instant a hot lead is created
+  (`taxis/signals.py`) — so they don't have to keep the dashboard open.
+- **FAQ model + `/faqs/` page** + `python manage.py seed_faqs` to seed
+  starter content for both passengers and drivers.
+- **Admin leads/payments dashboard** at `/admin/leads-dashboard/`, linked
+  from the top of the Django admin index.
+- **`/docs/`** — marketing plan, daily operations, onboarding script, and
+  growth notes for running this as an actual income stream, not just code.
+- **Bug fixes**: driver/car photos now actually render on the homepage and
+  driver profile (they were captured but never displayed); WhatsApp CTA
+  buttons show the driver's full name instead of just the first letter;
+  driver signup now correctly accepts the uploaded photo file
+  (`request.FILES` was previously dropped).
+- Payment pages now name the EcoCash recipient (`ECOCASH_MERCHANT_NAME`)
+  alongside the number, and hide the EcoCash proof fields when Paynow is
+  selected (JS avoids `:has()` for older Android WebView compatibility).
+- Star-rating widget for reviews (CSS-only), help text on ratings and on
+  the phone-number/photo signup fields, headings + spacing on the homepage
+  filter bar and driver list.
+- Custom 404/500 pages; `ADMINS`/email-on-crash wired in `settings/prod.py`;
+  signup is wrapped in a DB transaction so a failed Driver create can't
+  leave an orphaned User account behind.

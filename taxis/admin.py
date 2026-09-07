@@ -1,6 +1,13 @@
 from django.contrib import admin, messages
 
-from taxis.models import Driver, Fare, GoingToPost, Lead, Payment, Review
+from taxis.models import FAQ, Driver, Fare, GoingToPost, Lead, Payment, Review
+
+# Adds a "Leads & Payments Dashboard" link to the top of the admin index.
+# Uses a differently-named template (custom_index.html) that itself extends
+# "admin/index.html" — extending a template of the SAME name as the file
+# it's defined in would recurse infinitely through the loader, since our
+# project templates dir is searched before django.contrib.admin's.
+admin.site.index_template = "admin/custom_index.html"
 
 
 @admin.register(Driver)
@@ -62,3 +69,10 @@ class GoingToPostAdmin(admin.ModelAdmin):
 class ReviewAdmin(admin.ModelAdmin):
     list_display = ("driver", "rating", "passenger_name", "created_at")
     list_filter = ("rating",)
+
+
+@admin.register(FAQ)
+class FAQAdmin(admin.ModelAdmin):
+    list_display = ("question", "audience", "order", "is_published")
+    list_editable = ("order", "is_published")
+    list_filter = ("audience", "is_published")

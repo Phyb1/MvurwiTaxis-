@@ -5,10 +5,11 @@
 <p><a href="{% url 'taxis:request_taxi' %}" class="btn-wa" style="display:inline-block;width:auto;">Request Any Taxi &rarr;</a></p>
 
 {% if going_to_posts %}
+<h2 class="filters-heading">Drivers going out now</h2>
 <div class="going-to-banner">
     {% for post in going_to_posts %}
     <div class="going-to-card">
-        <strong>{{ post.driver.full_name }}</strong> going to <strong>{{ post.destination }}</strong><br>
+        <strong>{{ post.driver.full_name }}</strong> is going to <strong>{{ post.destination }}</strong><br>
         {{ post.departure_text }} &middot; {{ post.seats_available }} seats &middot; ${{ post.price_usd }}
         <br><a href="{% url 'taxis:driver_profile' post.driver.slug %}">View profile</a>
     </div>
@@ -16,6 +17,7 @@
 </div>
 {% endif %}
 
+<h2 class="filters-heading">Filter taxis</h2>
 <form class="filters" method="get">
     <input type="text" name="destination" placeholder="Destination" value="{{ filters.destination }}">
     <select name="car_type">
@@ -29,9 +31,13 @@
     <button type="submit">Filter</button>
 </form>
 
+<h2 class="driver-list-heading">{{ drivers|length }} taxi{{ drivers|length|pluralize }} listed</h2>
 <div class="driver-grid">
     {% for driver in drivers %}
     <div class="driver-card">
+        {% if driver.photo %}
+        <img class="car-photo" src="{{ driver.photo.url }}" alt="{{ driver.full_name }}'s {{ driver.get_car_type_display }}">
+        {% endif %}
         {% if driver.is_pro %}<span class="badge">PRO</span>{% endif %}
         {% if driver.is_verified %}<span class="badge">VERIFIED</span>{% endif %}
         <h3>{{ driver.full_name }}</h3>
@@ -44,7 +50,7 @@
             <span class="status-offline">&#9679; Offline</span>
             {% endif %}
         </p>
-        <a class="btn-wa" href="{{ driver.whatsapp_link }}" target="_blank" rel="noopener">WhatsApp {{ driver.full_name|first }}</a>
+        <a class="btn-wa" href="{{ driver.whatsapp_link }}" target="_blank" rel="noopener">WhatsApp {{ driver.full_name }}</a>
         <a href="{% url 'taxis:driver_profile' driver.slug %}">View profile</a>
     </div>
     {% empty %}

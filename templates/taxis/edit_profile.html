@@ -1,10 +1,11 @@
+{% load crispy_forms_tags %}
 {% extends "base.html" %}
 {% block title %}Edit Profile{% endblock %}
 {% block content %}
 <h1>Edit your profile</h1>
 <form class="stack" method="post" enctype="multipart/form-data">
     {% csrf_token %}
-    {{ form.as_p }}
+    {{ form|crispy }}
     <button type="submit">Save</button>
 </form>
 {% endblock %}

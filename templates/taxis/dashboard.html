@@ -26,7 +26,14 @@
 {% for lead in open_hot_leads %}
 <div class="lead-card">
     <p>{{ lead.pickup }} &rarr; {{ lead.destination }} &middot; {{ lead.people }} people &middot; {{ lead.requested_time }}</p>
+    {% if driver.is_pro %}
+    <form method="post" action="{% url 'taxis:claim_lead_pro' lead.id %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn">Claim free (Pro)</button>
+    </form>
+    {% else %}
     <a href="{% url 'taxis:unlock_lead' lead.id %}">Pay ${{ hot_lead_price }} to unlock</a>
+    {% endif %}
 </div>
 {% empty %}
 <p>No open hot leads right now.</p>
@@ -47,5 +54,5 @@
 <div class="lead-card">{{ post.destination }} &middot; {{ post.departure_text }} &middot; expires {{ post.expires_at }}</div>
 {% endfor %}
 
-<p><a href="{% url 'taxis:edit_profile' %}">Edit profile</a></p>
+<p><a href="{% url 'taxis:edit_profile' %}">Edit profile</a> &middot; <a href="{% url 'password_change' %}">Change password</a></p>
 {% endblock %}

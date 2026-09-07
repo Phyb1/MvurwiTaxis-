@@ -1,12 +1,16 @@
+{% load crispy_forms_tags %}
 {% extends "base.html" %}
 {% block title %}{{ driver.full_name }}{% endblock %}
 {% block content %}
+{% if driver.photo %}
+<img class="driver-profile-photo" src="{{ driver.photo.url }}" alt="{{ driver.full_name }}'s {{ driver.get_car_type_display }}">
+{% endif %}
 <h1>{{ driver.full_name }}</h1>
 <p>{{ driver.get_car_type_display }} &middot; {{ driver.car_reg }} &middot; {{ driver.seats }} seats &middot; Base: {{ driver.base_area }}</p>
 {% if driver.average_rating %}<p>&#9733; {{ driver.average_rating }} ({{ driver.reviews.count }} reviews)</p>{% endif %}
 {% if driver.route_list %}<p>Routes: {{ driver.route_list|join:", " }}</p>{% endif %}
 
-<a class="btn-wa" href="{{ wa_hail_link }}" target="_blank" rel="noopener" style="display:inline-block;width:auto;padding:0.6rem 1.2rem;">WhatsApp {{ driver.full_name|first }} now</a>
+<a class="btn-wa" href="{{ wa_hail_link }}" target="_blank" rel="noopener" style="display:inline-block;width:auto;padding:0.6rem 1.2rem;">WhatsApp {{ driver.full_name }} now</a>
 
 <p style="margin-top:1rem;">
     <button onclick="copyShareText('{{ share_text|escapejs }}')">Share this profile</button>
@@ -25,7 +29,7 @@
 <h3>Leave a review</h3>
 <form class="stack" method="post">
     {% csrf_token %}
-    {{ review_form.as_p }}
+    {{ review_form|crispy }}
     <button type="submit" name="submit_review">Submit review</button>
 </form>
 {% endblock %}

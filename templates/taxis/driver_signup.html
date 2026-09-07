@@ -1,11 +1,12 @@
+{% load crispy_forms_tags %}
 {% extends "base.html" %}
 {% block title %}List Your Taxi{% endblock %}
 {% block content %}
 <h1>List your taxi &mdash; free</h1>
 <p>Free tier: listed at the bottom, 3 leads/month. Upgrade to Pro anytime for unlimited leads and top placement.</p>
-<form class="stack" method="post">
+<form class="stack" method="post" enctype="multipart/form-data">
     {% csrf_token %}
-    {{ form.as_p }}
+    {{ form|crispy }}
     <button type="submit">Create profile</button>
 </form>
 {% endblock %}

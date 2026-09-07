@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Page not found{% endblock %}
+{% block content %}
+<h1>Page not found</h1>
+<p>That page doesn't exist — it may have moved, or the link was mistyped.</p>
+<p><a href="{% url 'taxis:home' %}">&larr; Back to the taxi directory</a></p>
+{% endblock %}

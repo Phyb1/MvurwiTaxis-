@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
+from django.db import transaction
 
 from taxis.models import Driver, GoingToPost, Lead, Payment, Review
 from taxis.utils.whatsapp import normalize_phone
@@ -7,10 +8,25 @@ from taxis.utils.whatsapp import normalize_phone
 
 class DriverSignupForm(forms.Form):
     full_name = forms.CharField(max_length=120)
-    phone_number = forms.CharField(max_length=20, help_text="e.g. 0775123456")
-    password = forms.CharField(widget=forms.PasswordInput)
+    phone_number = forms.CharField(
+        max_length=20,
+        help_text=(
+            "e.g. 0775123456 — this becomes your login username. It is never "
+            "shown to passengers directly; they contact you through the "
+            "WhatsApp button on your profile."
+        ),
+    )
+    email = forms.EmailField(
+        required=False,
+        help_text="Optional, but you'll need it if you ever forget your password.",
+    )
+    password = forms.CharField(widget=forms.PasswordInput, help_text="At least 8 characters.")
     car_type = forms.ChoiceField(choices=Driver._meta.get_field("car_type").choices)
     car_reg = forms.CharField(max_length=20)
+    photo = forms.ImageField(
+        required=False,
+        help_text="A clear photo of your car. Listings with a photo get more clicks — you can add this later too.",
+    )
     seats = forms.IntegerField(min_value=1, max_value=30, initial=4)
     base_area = forms.CharField(max_length=120, initial="Mvurwi Town")
     routes = forms.CharField(
@@ -27,20 +43,27 @@ class DriverSignupForm(forms.Form):
         return phone
 
     def save(self):
-        phone = self.cleaned_data["phone_number"]
-        user = User.objects.create_user(
-            username=phone, password=self.cleaned_data["password"]
-        )
-        driver = Driver.objects.create(
-            user=user,
-            full_name=self.cleaned_data["full_name"],
-            phone_number=phone,
-            car_type=self.cleaned_data["car_type"],
-            car_reg=self.cleaned_data["car_reg"],
-            seats=self.cleaned_data["seats"],
-            base_area=self.cleaned_data["base_area"],
-            routes=self.cleaned_data["routes"],
-        )
+        # Atomic: if Driver creation fails after the User is made (bad photo
+        # file, DB constraint, etc.) we don't want an orphaned login with no
+        # profile attached to it.
+        with transaction.atomic():
+            phone = self.cleaned_data["phone_number"]
+            email = self.cleaned_data.get("email", "")
+            user = User.objects.create_user(
+                username=phone, email=email, password=self.cleaned_data["password"]
+            )
+            driver = Driver.objects.create(
+                user=user,
+                full_name=self.cleaned_data["full_name"],
+                phone_number=phone,
+                email=email,
+                photo=self.cleaned_data.get("photo"),
+                car_type=self.cleaned_data["car_type"],
+                car_reg=self.cleaned_data["car_reg"],
+                seats=self.cleaned_data["seats"],
+                base_area=self.cleaned_data["base_area"],
+                routes=self.cleaned_data["routes"],
+            )
         return driver
 
 
@@ -79,12 +102,21 @@ class PaymentProofForm(forms.ModelForm):
     class Meta:
         model = Payment
         fields = ["method", "ecocash_reference", "proof_of_payment"]
+        widgets = {
+            "method": forms.RadioSelect,
+        }
+        help_texts = {
+            "ecocash_reference": "The transaction reference EcoCash texts you after paying.",
+            "proof_of_payment": "Or upload a screenshot of the confirmation instead.",
+        }
 
     def clean(self):
         cleaned = super().clean()
         method = cleaned.get("method")
         reference = cleaned.get("ecocash_reference")
         proof = cleaned.get("proof_of_payment")
+        # Paynow redirects to a hosted payment page and confirms itself via
+        # webhook — no manual reference/proof needed from the driver.
         if method == Payment.Method.ECOCASH and not reference and not proof:
             raise forms.ValidationError(
                 "Provide either an EcoCash transaction reference or a proof-of-payment screenshot."
@@ -92,7 +124,19 @@ class PaymentProofForm(forms.ModelForm):
         return cleaned
 
 
+class RatingWidget(forms.RadioSelect):
+    """Renders as a row of star radio buttons via CSS (see .star-rating in
+    style.css) rather than a plain <select> or bullet list."""
+    template_name = "taxis/widgets/star_rating.html"
+    option_template_name = "taxis/widgets/star_rating_option.html"
+
+
 class ReviewForm(forms.ModelForm):
     class Meta:
         model = Review
         fields = ["passenger_name", "rating", "comment"]
+        widgets = {"rating": RatingWidget(choices=[(i, str(i)) for i in range(5, 0, -1)])}
+        help_texts = {
+            "rating": "Tap a star. 5 = excellent, 1 = poor.",
+            "comment": "Optional — a line or two about your trip.",
+        }

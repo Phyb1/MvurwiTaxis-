@@ -1,4 +1,3 @@
-from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from taxis import views
@@ -22,10 +21,7 @@ urlpatterns = [
     path("dashboard/lead/<int:lead_id>/unlock/", views.unlock_lead, name="unlock_lead"),
     path("dashboard/go-pro/", views.go_pro, name="go_pro"),
     path("dashboard/going-to/new/", views.post_going_to, name="post_going_to"),
+    path("dashboard/lead/<int:lead_id>/claim/", views.claim_lead_pro, name="claim_lead_pro"),
 
-    path(
-        "password-reset/",
-        auth_views.PasswordResetView.as_view(template_name="registration/password_reset_form.html"),
-        name="password_reset",
-    ),
+    path("faqs/", views.faqs, name="faqs"),
 ]

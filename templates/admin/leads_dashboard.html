@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Leads Dashboard{% endblock %}
+{% block content %}
+<h1>Leads &amp; Payments Dashboard</h1>
+<p><a href="/admin/">&larr; Back to Django admin</a></p>
+
+<div class="dashboard-grid">
+    <div class="stat-card"><div class="value">{{ open_hot_leads|length }}</div>Open hot leads</div>
+    <div class="stat-card"><div class="value">{{ pending_payments|length }}</div>Pending payments (need confirming)</div>
+    <div class="stat-card"><div class="value">{{ unlocked_today }}</div>Unlocked today</div>
+    <div class="stat-card"><div class="value">{{ pro_claims_today }}</div>Free Pro claims today</div>
+    <div class="stat-card"><div class="value">{{ active_pro_drivers }}</div>Active Pro drivers</div>
+    <div class="stat-card"><div class="value">{{ online_drivers|length }}</div>Online right now</div>
+</div>
+
+<h2>Pending payments</h2>
+{% for payment in pending_payments %}
+<div class="lead-card">
+    {{ payment.driver.full_name }} &middot; {{ payment.get_purpose_display }} &middot; ${{ payment.amount_usd }}
+    &middot; ref: {{ payment.ecocash_reference|default:"—" }}
+    &middot; <a href="/admin/taxis/payment/{{ payment.id }}/change/">Review &amp; confirm</a>
+</div>
+{% empty %}
+<p>Nothing pending — free-tier lead payments are all caught up.</p>
+{% endfor %}
+
+<h2>Open hot leads</h2>
+{% for lead in open_hot_leads %}
+<div class="lead-card">{{ lead.pickup }} &rarr; {{ lead.destination }} &middot; {{ lead.created_at }}</div>
+{% empty %}
+<p>None open.</p>
+{% endfor %}
+{% endblock %}

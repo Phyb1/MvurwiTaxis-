@@ -1,0 +1,30 @@
+<script>
+(function () {
+    var form = document.getElementById("payment-form");
+    if (!form) return;
+    var ecocashBox = document.getElementById("ecocash-instructions");
+    var paynowBox = document.getElementById("paynow-instructions");
+    // crispy renders the "method" RadioSelect as id_method_0 (ecocash), id_method_1 (paynow)
+    var radios = form.querySelectorAll("input[name='method']");
+    // Walk up from the field itself to its crispy-rendered wrapper (.mb-3)
+    // rather than relying on :has(), which some older Android WebViews
+    // (a real audience here) don't support.
+    function wrapperFor(fieldId) {
+        var field = document.getElementById(fieldId);
+        return field ? field.closest(".mb-3") : null;
+    }
+    var proofFields = [wrapperFor("id_ecocash_reference"), wrapperFor("id_proof_of_payment")]
+        .filter(Boolean);
+
+    function applyState() {
+        var selected = form.querySelector("input[name='method']:checked");
+        var isPaynow = selected && selected.value === "paynow";
+        if (ecocashBox) ecocashBox.style.display = isPaynow ? "none" : "block";
+        if (paynowBox) paynowBox.style.display = isPaynow ? "block" : "none";
+        proofFields.forEach(function (el) { el.style.display = isPaynow ? "none" : "block"; });
+    }
+
+    radios.forEach(function (r) { r.addEventListener("change", applyState); });
+    applyState();
+})();
+</script>

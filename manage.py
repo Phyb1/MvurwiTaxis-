@@ -4,7 +4,9 @@ import sys
 
 
 def main():
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "mvurwitaxis.settings")
+    # manage.py is a local/dev tool — default to dev settings. Production
+    # entry points (wsgi.py, passenger_wsgi.py) default to prod instead.
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "mvurwitaxis.settings.dev")
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

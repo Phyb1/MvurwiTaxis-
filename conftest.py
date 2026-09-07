@@ -4,6 +4,12 @@ from django.utils import timezone
 
 from taxis.models import Driver, Fare, Lead
 
+# No collectstatic fixture needed: tests run under mvurwitaxis.settings.dev
+# (see pytest.ini), which uses plain StaticFilesStorage — no manifest file
+# required, so {% static %} tags in templates resolve without a pre-test
+# collectstatic step. Production (settings.prod) still uses WhiteNoise's
+# manifest storage; run collectstatic as part of deployment, not testing.
+
 
 @pytest.fixture
 def driver_user(db):

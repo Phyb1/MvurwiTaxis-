@@ -1,3 +1,4 @@
+{% load crispy_forms_tags %}
 {% extends "base.html" %}
 {% block title %}Request a Taxi{% endblock %}
 {% block content %}
@@ -5,7 +6,7 @@
 <p>We'll notify all online drivers. A driver pays a small fee to unlock your number, so expect a WhatsApp call shortly.</p>
 <form class="stack" method="post">
     {% csrf_token %}
-    {{ form.as_p }}
+    {{ form|crispy }}
     <button type="submit">Send request</button>
 </form>
 {% endblock %}
