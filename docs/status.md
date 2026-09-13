@@ -1,4 +1,3 @@
-[Attach your screenshot]
 
 This is MvurwiTaxis 👆
 
