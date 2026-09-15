@@ -18,6 +18,7 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 from taxis.models import Driver, Lead
+from taxis.utils.push import send_push
 
 logger = logging.getLogger("taxis")
 
@@ -29,7 +30,7 @@ def notify_pro_drivers_of_new_hot_lead(sender, instance, created, **kwargs):
 
     pro_drivers = Driver.objects.filter(
         pro_until__gt=timezone.now(), is_active_listing=True,
-    ).exclude(email="")
+    ).prefetch_related("push_subscriptions")
 
     if not pro_drivers.exists():
         return
@@ -42,11 +43,20 @@ def notify_pro_drivers_of_new_hot_lead(sender, instance, created, **kwargs):
         f"first to claim gets the passenger's number.\n"
         f"{settings.SITE_DOMAIN}"
     )
-    recipient_list = list(pro_drivers.values_list("email", flat=True))
+    recipients_with_email = [d for d in pro_drivers if d.email]
+    if recipients_with_email:
+        try:
+            send_mail(
+                subject, body, settings.DEFAULT_FROM_EMAIL,
+                [d.email for d in recipients_with_email], fail_silently=False,
+            )
+        except Exception:
+            # Never let a notification failure break lead creation for the
+            # passenger — log it and move on.
+            logger.exception("Failed to send hot-lead notification email to pro drivers")
 
-    try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, recipient_list, fail_silently=False)
-    except Exception:
-        # Never let a notification failure break lead creation for the
-        # passenger — log it and move on.
-        logger.exception("Failed to send hot-lead notification email to pro drivers")
+    if settings.PUSH_NOTIFICATIONS_ENABLED:
+        push_body = f"{instance.pickup} -> {instance.destination}, {instance.people} people. Tap to claim."
+        for driver in pro_drivers:
+            for subscription in driver.push_subscriptions.all():
+                send_push(subscription, title="New hot lead", body=push_body, url="/dashboard/")

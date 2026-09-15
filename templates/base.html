@@ -5,7 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}MvurwiTaxis{% endblock %} | MvurwiTaxis.co.zw</title>
     <meta name="theme-color" content="#0d0d0d">
+    <link rel="icon" href="{% static 'favicon.ico' %}">
+    <link rel="apple-touch-icon" href="{% static 'img/apple-touch-icon.png' %}">
     <link rel="manifest" href="{% static 'manifest.json' %}">
+    <link rel="canonical" href="{{ request.build_absolute_uri }}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="MvurwiTaxis">
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
@@ -24,6 +30,7 @@
                 <a href="{% url 'taxis:driver_login' %}">Driver Login</a>
                 <a class="cta" href="{% url 'taxis:driver_signup' %}">List Your Taxi</a>
             {% endif %}
+            <button id="install-app-btn" hidden onclick="installApp()" style="background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:999px;padding:0.3rem 0.8rem;font-size:0.8rem;cursor:pointer;">Install App</button>
         </nav>
     </header>
 

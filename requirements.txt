@@ -4,6 +4,7 @@ whitenoise==6.8.2
 Pillow==11.0.0
 django-crispy-forms==2.3
 crispy-bootstrap5==2024.10
+pywebpush==2.0.1
 pytest==8.3.4
 pytest-django==4.9.0
 pytest-cov==6.0.0

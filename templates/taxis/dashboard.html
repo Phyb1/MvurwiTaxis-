@@ -22,6 +22,15 @@
 <p><a href="{% url 'taxis:go_pro' %}">Upgrade to Pro &rarr;</a></p>
 {% endif %}
 
+{% if push_enabled %}
+<p>
+    <button data-vapid-key="{{ vapid_public_key }}" data-csrf="{{ csrf_token }}"
+            onclick="enablePushNotifications(this)">
+        Enable lead notifications on this device
+    </button>
+</p>
+{% endif %}
+
 <h2>Open Hot Leads</h2>
 {% for lead in open_hot_leads %}
 <div class="lead-card">

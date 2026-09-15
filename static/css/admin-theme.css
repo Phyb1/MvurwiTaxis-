@@ -1,0 +1,49 @@
+/* Overrides Django admin's CSS custom properties (defined in
+   admin/css/base.css :root) rather than fighting individual selectors —
+   this is the officially supported way to re-theme the stock admin. */
+:root {
+    --primary: #0d0d0d;
+    --secondary: #161616;
+    --accent: #c8f04d;
+    --primary-fg: #f2f2f2;
+
+    --body-fg: #f2f2f2;
+    --body-bg: #0d0d0d;
+    --body-quiet-color: #9a9a9a;
+    --body-loud-color: #f2f2f2;
+
+    --header-color: #0d0d0d;
+    --header-branding-color: #c8f04d;
+    --header-bg: #161616;
+    --header-link-color: #c8f04d;
+
+    --breadcrumbs-fg: #9a9a9a;
+    --breadcrumbs-link-fg: #c8f04d;
+    --breadcrumbs-bg: #161616;
+
+    --link-fg: #c8f04d;
+    --link-hover-color: #dbff85;
+    --link-selected-fg: #c8f04d;
+
+    --hairline-color: #262626;
+    --border-color: #262626;
+
+    --button-bg: #c8f04d;
+    --button-fg: #0d0d0d;
+    --button-hover-bg: #dbff85;
+    --default-button-bg: #c8f04d;
+    --default-button-hover-bg: #dbff85;
+
+    --darkened-bg: #161616;
+    --selected-bg: #1f1f1f;
+    --selected-row: #1a1f0f;
+
+    --object-tools-bg: #c8f04d;
+    --object-tools-fg: #0d0d0d;
+
+    color-scheme: dark;
+}
+
+#header { background: var(--header-bg); }
+div.breadcrumbs { background: var(--breadcrumbs-bg); }
+.module h2, .module caption, .inline-group h2 { background: var(--secondary); }

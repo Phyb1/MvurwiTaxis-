@@ -24,4 +24,6 @@ urlpatterns = [
     path("dashboard/lead/<int:lead_id>/claim/", views.claim_lead_pro, name="claim_lead_pro"),
 
     path("faqs/", views.faqs, name="faqs"),
+    path("push/subscribe/", views.push_subscribe, name="push_subscribe"),
+    path("push/unsubscribe/", views.push_unsubscribe, name="push_unsubscribe"),
 ]

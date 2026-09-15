@@ -93,3 +93,38 @@ def test_payment_confirm_stacks_pro_monthly_on_existing_pro(driver_user):
     driver_user.refresh_from_db()
     days_left = (driver_user.pro_until - timezone.now()).days
     assert 33 <= days_left <= 35  # 5 existing + 30 new, roughly
+
+
+def test_editing_status_directly_and_saving_also_applies_effects(driver_user, hot_lead):
+    """Admin editing the status dropdown on the change form (not using the
+    bulk 'confirm_payments' action) must trigger the same unlock/pro-extend
+    effects — this is what plain .save() does now, not just .confirm()."""
+    payment = Payment.objects.create(
+        driver=driver_user, purpose=Payment.Purpose.HOT_LEAD,
+        amount_usd=Decimal("0.20"), related_lead=hot_lead,
+    )
+    payment.status = Payment.Status.CONFIRMED
+    payment.save()
+
+    hot_lead.refresh_from_db()
+    driver_user.refresh_from_db()
+    assert hot_lead.status == Lead.Status.UNLOCKED
+    assert driver_user.leads_used_this_month == 1
+    assert payment.confirmed_at is not None
+
+
+def test_saving_unrelated_field_change_does_not_reapply_effects(driver_user, hot_lead):
+    """Saving a payment that's already confirmed (e.g. editing an unrelated
+    field) must not double-apply effects."""
+    payment = Payment.objects.create(
+        driver=driver_user, purpose=Payment.Purpose.HOT_LEAD,
+        amount_usd=Decimal("0.20"), related_lead=hot_lead, status=Payment.Status.CONFIRMED,
+    )
+    driver_user.refresh_from_db()
+    leads_after_create = driver_user.leads_used_this_month
+
+    payment.ecocash_reference = "EC-updated"
+    payment.save()
+
+    driver_user.refresh_from_db()
+    assert driver_user.leads_used_this_month == leads_after_create

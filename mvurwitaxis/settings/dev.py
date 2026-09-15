@@ -21,8 +21,14 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 INSTALLED_APPS = INSTALLED_APPS + ["debug_toolbar"]
 MIDDLEWARE = ["debug_toolbar.middleware.DebugToolbarMiddleware"] + MIDDLEWARE
 INTERNAL_IPS = ["127.0.0.1", "localhost"]
-
-# django-debug-toolbar refuses to render for hosts it doesn't recognise as
-# "internal" unless SHOW_TOOLBAR_CALLBACK is relaxed — handy under Termux
-# where localhost may resolve oddly.
-DEBUG_TOOLBAR_CONFIG = {"SHOW_TOOLBAR_CALLBACK": lambda request: DEBUG}
+# Deliberately NOT setting a custom SHOW_TOOLBAR_CALLBACK here — the default
+# (checks INTERNAL_IPS against settings.DEBUG live, every request) is safe.
+# An earlier version used `lambda request: DEBUG`, closing over this
+# module's DEBUG=True constant captured at import time — that silently kept
+# returning True even when Django's test runner overrides settings.DEBUG to
+# False for the test session, while urls.py's `if settings.DEBUG` guard
+# (evaluated lazily, after that override) correctly excluded the djdt URLs.
+# Result: middleware tried to render a toolbar whose URLs were never
+# registered -> NoReverseMatch. Two different readings of "DEBUG" disagreeing.
+# mvurwitaxis.settings.test (see test.py) sidesteps this entirely by not
+# installing debug_toolbar for the test process at all.

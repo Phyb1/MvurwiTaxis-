@@ -7,3 +7,4 @@ staticfiles/
 media/
 logs/*.log
 .pytest_cache/
+test-media/

@@ -93,10 +93,30 @@ and the admin bulk-confirm-payments action.
   overrides (`.form-control`, `.form-label`, etc. in `style.css`) rather than
   a hand-built template pack matching every design-system detail — functional
   and on-brand, but worth a visual pass if it needs to match pixel-for-pixel.
-- PWA icons (`static/img/icon-192.png`, `icon-512.png`) are referenced in
-  `manifest.json` but not included — drop in real PNGs before shipping.
 
 ## Recent additions (this revision)
+
+- **Fixed the production 500 you hit**: `templates/404.html` extends
+  `base.html`, which references `{% static 'manifest.json' %}` — if
+  `collectstatic` hasn't run (or ran before a file existed), Django's
+  manifest storage raises instead of degrading, so even a harmless 404 was
+  becoming a 500. Two fixes: (1) `mvurwitaxis/storage.py` adds a lenient
+  manifest storage that logs a warning and serves the unhashed filename
+  instead of raising — one missing entry can no longer take down the whole
+  site; (2) run `collectstatic` after every deploy regardless (see
+  `README` setup steps) — the lenient storage is a safety net, not a
+  substitute for that.
+- **Taxi PWA icons** generated (`static/img/icon-192.png`, `icon-512.png`)
+  — dark rounded-square background, accent-green car silhouette, matches
+  the design system. No more missing-icon gap in `manifest.json`.
+- **Fixed a debug-toolbar test-isolation bug**: `SHOW_TOOLBAR_CALLBACK` was
+  closing over a module-level `DEBUG=True` constant, which disagreed with
+  Django's test runner overriding `settings.DEBUG` to `False` mid-session —
+  the toolbar middleware kept trying to render a toolbar whose URLs were
+  never registered (`NoReverseMatch: 'djdt'`). Fixed by adding
+  `mvurwitaxis/settings/test.py` (pytest now points here), which strips
+  `debug_toolbar` out entirely for the test process — it was never useful
+  inside a test run anyway.
 
 - **Settings split**: `mvurwitaxis/settings/{base,dev,prod}.py`. Dev uses
   plain static storage (no collectstatic needed for tests or local dev);

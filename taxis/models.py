@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from taxis.utils.geo import haversine_km
+from taxis.utils.images import compress_image
 
 
 class CarType(models.TextChoices):
@@ -74,6 +75,11 @@ class Driver(models.Model):
                 n += 1
                 slug = f"{base_slug}-{n}"
             self.slug = slug
+        # FieldFile._committed is False only for a newly-assigned upload that
+        # hasn't hit storage yet — this is how we avoid recompressing an
+        # already-saved photo on every unrelated field update.
+        if self.photo and not self.photo._committed:
+            self.photo = compress_image(self.photo)
         super().save(*args, **kwargs)
 
     @property
@@ -231,14 +237,32 @@ class Payment(models.Model):
     def __str__(self):
         return f"{self.driver} - {self.get_purpose_display()} - {self.get_status_display()}"
 
-    def confirm(self):
-        """Apply the payment's effect to the driver/lead. Admin-triggered."""
-        if self.status == self.Status.CONFIRMED:
-            return
-        self.status = self.Status.CONFIRMED
-        self.confirmed_at = timezone.now()
-        self.save(update_fields=["status", "confirmed_at"])
+    def save(self, *args, **kwargs):
+        """Apply confirmation effects (unlock lead / extend Pro) the moment
+        status transitions to CONFIRMED — regardless of whether that came
+        from the admin's bulk 'confirm_payments' action or from an admin
+        just editing the status field directly on the change form and
+        hitting save. Both paths must behave identically."""
+        previous_status = None
+        if self.pk:
+            previous_status = (
+                Payment.objects.filter(pk=self.pk).values_list("status", flat=True).first()
+            )
+        newly_confirmed = (
+            self.status == self.Status.CONFIRMED and previous_status != self.Status.CONFIRMED
+        )
+        if newly_confirmed and not self.confirmed_at:
+            self.confirmed_at = timezone.now()
 
+        if self.proof_of_payment and not self.proof_of_payment._committed:
+            self.proof_of_payment = compress_image(self.proof_of_payment)
+
+        super().save(*args, **kwargs)
+
+        if newly_confirmed:
+            self._apply_confirmation_effects()
+
+    def _apply_confirmation_effects(self):
         if self.purpose == self.Purpose.HOT_LEAD and self.related_lead:
             lead = self.related_lead
             if lead.status == Lead.Status.OPEN:
@@ -252,6 +276,15 @@ class Payment(models.Model):
             self._extend_pro(days=7)
         elif self.purpose == self.Purpose.PRO_MONTHLY:
             self._extend_pro(days=30)
+
+    def confirm(self):
+        """Convenience method for callers that just want to mark a payment
+        confirmed — e.g. the admin bulk action, or tests. The actual effect
+        application lives in save()/_apply_confirmation_effects() so it
+        fires the same way no matter how status=CONFIRMED gets set."""
+        if self.status != self.Status.CONFIRMED:
+            self.status = self.Status.CONFIRMED
+            self.save()
 
     def _extend_pro(self, days):
         now = timezone.now()
@@ -303,6 +336,23 @@ class Review(models.Model):
 
     def __str__(self):
         return f"{self.driver} - {self.rating}*"
+
+
+class PushSubscription(models.Model):
+    """Browser Web Push subscription for a driver's device. A driver can
+    have more than one (phone + a second device), so this isn't OneToOne."""
+
+    driver = models.ForeignKey(Driver, on_delete=models.CASCADE, related_name="push_subscriptions")
+    endpoint = models.URLField(max_length=500, unique=True)
+    p256dh = models.CharField(max_length=200)
+    auth = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Push subscription for {self.driver}"
+
+    def as_subscription_info(self):
+        return {"endpoint": self.endpoint, "keys": {"p256dh": self.p256dh, "auth": self.auth}}
 
 
 class FAQ(models.Model):

@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
+    "django.contrib.sitemaps",
     "crispy_forms",
     "crispy_bootstrap5",
     "taxis",
@@ -104,6 +105,15 @@ PAYNOW_RESULT_URL = env("PAYNOW_RESULT_URL", default="")
 PAYNOW_ENABLED = env.bool("PAYNOW_ENABLED", default=False)
 WHATSAPP_ADMIN_NUMBER = env("WHATSAPP_ADMIN_NUMBER", default="")
 
+# --- Web Push (VAPID) ---
+# Generate your OWN keypair with `python manage.py generate_vapid_keys` —
+# never reuse a keypair from anywhere else, including any example/demo one.
+VAPID_PUBLIC_KEY = env("VAPID_PUBLIC_KEY", default="")
+VAPID_PRIVATE_KEY = env("VAPID_PRIVATE_KEY", default="")
+VAPID_CLAIM_EMAIL = env("VAPID_CLAIM_EMAIL", default="mailto:admin@mvurwitaxis.co.zw")
+PUSH_NOTIFICATIONS_ENABLED = bool(env("VAPID_PUBLIC_KEY", default="") and env("VAPID_PRIVATE_KEY", default=""))
+
+
 HOT_LEAD_PRICE_USD = "0.20"
 PRO_WEEKLY_PRICE_USD = "3.00"
 PRO_MONTHLY_PRICE_USD = "10.00"
@@ -140,5 +150,5 @@ LOGGING = {
 }
 
 # --- Third-party form styling ---
-CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+CRISPY_ALLOWED_TEMPLATE_PACKS = ("bootstrap5",)
 CRISPY_TEMPLATE_PACK = "bootstrap5"

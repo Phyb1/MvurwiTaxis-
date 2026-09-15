@@ -15,7 +15,7 @@ MANAGERS = ADMINS
 
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+    "staticfiles": {"BACKEND": "mvurwitaxis.storage.LenientManifestStaticFilesStorage"},
 }
 
 # SMTP email — required for password reset + pro-driver lead notifications

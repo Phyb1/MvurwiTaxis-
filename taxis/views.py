@@ -1,4 +1,5 @@
 from decimal import Decimal
+import json
 
 from django.conf import settings
 from django.contrib import messages
@@ -7,6 +8,7 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
+from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -20,7 +22,7 @@ from taxis.forms import (
     RequestTaxiForm,
     ReviewForm,
 )
-from taxis.models import CarType, Driver, FAQ, Fare, GoingToPost, Lead, Payment
+from taxis.models import CarType, Driver, FAQ, Fare, GoingToPost, Lead, Payment, PushSubscription
 from taxis.utils.whatsapp import build_wa_link, hail_message, share_profile_message
 
 
@@ -343,3 +345,36 @@ def faqs(request):
     if audience in (FAQ.Audience.PASSENGER, FAQ.Audience.DRIVER):
         faq_list = faq_list.filter(audience__in=[audience, FAQ.Audience.BOTH])
     return render(request, "taxis/faqs.html", {"faqs": faq_list, "audience": audience})
+
+
+@login_required
+@require_POST
+def push_subscribe(request):
+    """Called by the dashboard's 'Enable notifications' button (see app.js).
+    Body is the raw PushSubscription JSON from the browser's Push API."""
+    try:
+        data = json.loads(request.body)
+        endpoint = data["endpoint"]
+        keys = data["keys"]
+        p256dh, auth = keys["p256dh"], keys["auth"]
+    except (ValueError, KeyError, TypeError):
+        return HttpResponseBadRequest("Malformed subscription payload")
+
+    PushSubscription.objects.update_or_create(
+        endpoint=endpoint,
+        defaults={"driver": request.user.driver, "p256dh": p256dh, "auth": auth},
+    )
+    return JsonResponse({"status": "subscribed"})
+
+
+@login_required
+@require_POST
+def push_unsubscribe(request):
+    try:
+        data = json.loads(request.body)
+        endpoint = data["endpoint"]
+    except (ValueError, KeyError, TypeError):
+        return HttpResponseBadRequest("Malformed payload")
+
+    PushSubscription.objects.filter(endpoint=endpoint, driver=request.user.driver).delete()
+    return JsonResponse({"status": "unsubscribed"})
