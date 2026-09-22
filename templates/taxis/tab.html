@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% block title %}Your tab{% endblock %}
+{% block content %}
+<h1>Your tab</h1>
+<p>You get {{ free_cap }} free leads a month. After that, showing a passenger's number adds ${{ lead_price }} to your tab instead of asking you to pay each time.
+   Settle whenever you like; it must be settled once it reaches ${{ tab_limit }} or is {{ tab_max_days }} days old.</p>
+
+<div class="dashboard-grid">
+    <div class="stat-card"><div class="value">${{ balance }}</div>Owed{% if due %} &middot; <strong>due now</strong>{% endif %}</div>
+</div>
+
+{% if pending %}
+<div class="message message-info">
+    Your ${{ pending.amount_usd }} settlement is waiting for confirmation. You can keep unlocking leads meanwhile.
+</div>
+{% endif %}
+
+<h2>Unsettled leads</h2>
+{% for entry in entries %}
+<div class="lead-card">
+    {{ entry.created_at|date:"j M, H:i" }} &middot;
+    {% if entry.lead %}{{ entry.lead.passenger_name }} &middot; {{ entry.lead.pickup }} &rarr; {{ entry.lead.destination }}{% else %}Lead unlock{% endif %}
+    &middot; ${{ entry.amount_usd }}
+</div>
+{% empty %}
+<p>Nothing on your tab.</p>
+{% endfor %}
+
+{% if can_settle %}
+<h2>Settle ${{ balance }}</h2>
+<div id="ecocash-instructions">
+    <p>Pay via EcoCash to <strong>{{ ecocash_merchant_number }}</strong> ({{ ecocash_merchant_name }}), then submit your reference or a screenshot below.</p>
+</div>
+{% if paynow_enabled %}
+<div id="paynow-instructions" style="display:none;">
+    <p>You'll be redirected to Paynow to complete this payment securely — no need to submit a reference.</p>
+    <a href="#" class="btn" id="paynow-pay-link">Pay with Paynow &rarr;</a>
+</div>
+{% endif %}
+<form class="stack" method="post" enctype="multipart/form-data" id="payment-form">
+    {% csrf_token %}
+    {{ form|crispy }}
+    <button type="submit">I've paid &mdash; submit</button>
+</form>
+{% if paynow_enabled %}{% include "taxis/_payment_method_toggle.html" %}{% endif %}
+{% endif %}
+<p class="muted"><a href="{% url 'taxis:driver_dashboard' %}">&larr; Back to dashboard</a></p>
+{% endblock %}

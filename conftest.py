@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pytest
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -58,3 +60,57 @@ def hot_lead(db):
         people=2,
         requested_time="Now",
     )
+
+
+@pytest.fixture(autouse=True)
+def _isolated_settings(settings):
+    """Make every test independent of whatever is in the developer's .env:
+    no real push, no real SMTP, no admin WhatsApp number, a known domain."""
+    settings.PUSH_NOTIFICATIONS_ENABLED = False
+    settings.WHATSAPP_ADMIN_NUMBER = ""
+    settings.SITE_DOMAIN = "mvurwitaxis.test"
+    settings.EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+
+@pytest.fixture
+def direct_lead(driver_user):
+    """A message request from a passenger to driver_user specifically."""
+    return Lead.objects.create(
+        kind=Lead.Kind.DIRECT,
+        target_driver=driver_user,
+        passenger_name="Rudo",
+        passenger_phone="263771234567",
+        pickup="Mvurwi Town",
+        destination="Harare",
+        people=2,
+        requested_time="Now",
+        message="I have 2 bags",
+    )
+
+
+@pytest.fixture
+def make_pro():
+    def _make_pro(driver, days=5):
+        driver.pro_until = timezone.now() + timedelta(days=days)
+        driver.save(update_fields=["pro_until"])
+        return driver
+    return _make_pro
+
+
+@pytest.fixture
+def use_up_free_quota(settings):
+    def _use_up(driver):
+        driver.leads_used_this_month = settings.FREE_TIER_LEAD_CAP
+        driver.save(update_fields=["leads_used_this_month"])
+        return driver
+    return _use_up
+
+
+@pytest.fixture
+def new_hot_lead(db):
+    def _new(name="Rudo"):
+        return Lead.objects.create(
+            kind=Lead.Kind.HOT, passenger_name=name, passenger_phone="263771234567",
+            pickup="Mvurwi Town", destination="Harare", people=1,
+        )
+    return _new

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 import json
 
@@ -7,14 +8,25 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView
-from django.http import HttpResponseBadRequest, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
-from django.utils import timezone
-from django.views.decorators.http import require_POST
+from functools import wraps
 
+from django.contrib.staticfiles import finders
+from django.core.exceptions import PermissionDenied
+from django.db.models import Sum
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, HttpResponseRedirect, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse, reverse_lazy
+from django.utils import timezone
+from django.utils.functional import cached_property
+from django.views import View
+from django.views.decorators.http import require_POST
+from django.views.generic import DetailView, FormView
+
+from taxis import services
 from taxis.forms import (
+    DirectRequestForm,
     DriverProfileForm,
     DriverSignupForm,
     GoingToForm,
@@ -22,7 +34,11 @@ from taxis.forms import (
     RequestTaxiForm,
     ReviewForm,
 )
-from taxis.models import CarType, Driver, FAQ, Fare, GoingToPost, Lead, Payment, PushSubscription
+from taxis.models import (
+    CarType, Driver, FAQ, Fare, GoingToPost, Lead, Payment, PushSubscription, TabEntry,
+)
+from taxis.services import Unlock
+from taxis.utils.emails import send_welcome_email
 from taxis.utils.whatsapp import build_wa_link, hail_message, share_profile_message
 
 
@@ -90,7 +106,6 @@ def driver_profile(request, slug):
     context = {
         "driver": driver,
         "review_form": review_form,
-        "wa_hail_link": build_wa_link(driver.phone_number, hail_message(driver.route_list[0] if driver.route_list else "")),
         "share_text": share_profile_message(profile_url),
         "profile_url": profile_url,
     }
@@ -106,15 +121,104 @@ def request_taxi(request):
                 request,
                 "Request sent to available drivers. They'll reach out on WhatsApp shortly.",
             )
-            return redirect("taxis:request_taxi_sent", lead_id=lead.id)
+            return redirect("taxis:lead_status", token=lead.token)
     else:
         form = RequestTaxiForm()
     return render(request, "taxis/request_taxi.html", {"form": form})
 
 
-def request_taxi_sent(request, lead_id):
-    lead = get_object_or_404(Lead, id=lead_id)
-    return render(request, "taxis/request_taxi_sent.html", {"lead": lead})
+class DriverRequiredMixin(LoginRequiredMixin):
+    """Logged in AND has a Driver profile (staff/admin accounts don't)."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and getattr(request.user, "driver", None) is None:
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+    @cached_property
+    def driver(self):
+        return self.request.user.driver
+
+
+def driver_required(view_func):
+    """Function-view equivalent of DriverRequiredMixin, for the views below
+    that pre-date the class-based ones. Logged in AND has a Driver profile
+    -- a staff/admin account that is logged in but has no Driver would
+    otherwise 500 on `request.user.driver` instead of a clean 403."""
+    @login_required
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if getattr(request.user, "driver", None) is None:
+            raise PermissionDenied
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+class DirectRequestView(FormView):
+    """Passenger messages ONE driver. Reuses the request-taxi fields, and the
+    signal in taxis/signals.py pushes + emails the driver."""
+
+    template_name = "taxis/direct_request.html"
+    form_class = DirectRequestForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.driver = get_object_or_404(Driver, slug=kwargs["slug"], is_active_listing=True)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["driver"] = self.driver
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["driver"] = self.driver
+        return context
+
+    def form_valid(self, form):
+        lead = form.save()
+        messages.success(self.request, f"Request sent to {self.driver.full_name}.")
+        return redirect("taxis:lead_status", token=lead.token)
+
+
+class LeadStatusView(DetailView):
+    """Passenger's private status page, addressed by an unguessable token
+    (never the sequential lead id). Auto-refreshes while the request is open,
+    which is what keeps the passenger on the platform until a driver answers."""
+
+    slug_field = "token"
+    slug_url_kwarg = "token"
+    template_name = "taxis/lead_status.html"
+    context_object_name = "lead"
+
+    def get_queryset(self):
+        return Lead.objects.exclude(kind=Lead.Kind.PASSIVE).select_related(
+            "target_driver", "unlocked_by"
+        )
+
+
+class WhatsAppRedirectView(View):
+    """Every WhatsApp button on the site points here instead of straight at
+    wa.me, so each tap is logged as a PASSIVE lead before redirecting."""
+
+    def get(self, request, slug):
+        driver = get_object_or_404(Driver, slug=slug, is_active_listing=True)
+        self._log_tap(request, driver)
+        destination = driver.route_list[0] if driver.route_list else ""
+        return HttpResponseRedirect(build_wa_link(driver.phone_number, hail_message(destination)))
+
+    @staticmethod
+    def _log_tap(request, driver):
+        key = f"wa_tap_{driver.pk}"
+        now = timezone.now().timestamp()
+        last_tap = request.session.get(key)
+        if last_tap and now - last_tap < settings.PASSIVE_CLICK_DEDUPE_MINUTES * 60:
+            return
+        request.session[key] = now
+        Lead.objects.create(
+            kind=Lead.Kind.PASSIVE, driver_profile_viewed=driver,
+            passenger_name="", passenger_phone="", pickup="", destination="",
+        )
 
 
 # --- Driver auth & dashboard ---
@@ -125,6 +229,7 @@ def driver_signup(request):
         if form.is_valid():
             driver = form.save()
             auth_login(request, driver.user)
+            send_welcome_email(driver)
             messages.success(request, "Profile created. You're listed under Free tier — go online to start getting leads.")
             return redirect("taxis:driver_dashboard")
     else:
@@ -141,17 +246,35 @@ def driver_logout(request):
     return redirect("taxis:home")
 
 
-@login_required
+@driver_required
 def driver_dashboard(request):
     driver = request.user.driver
+    now = timezone.now()
     open_hot_leads = Lead.objects.filter(kind=Lead.Kind.HOT, status=Lead.Status.OPEN)
+    direct_requests = Lead.objects.filter(
+        kind=Lead.Kind.DIRECT, target_driver=driver, status=Lead.Status.OPEN,
+    )
     my_unlocked_leads = Lead.objects.filter(unlocked_by=driver).order_by("-unlocked_at")[:20]
     pending_payments = driver.payments.filter(status=Payment.Status.PENDING)
-    going_to_posts = driver.going_to_posts.filter(expires_at__gt=timezone.now())
+    going_to_posts = driver.going_to_posts.filter(expires_at__gt=now)
 
     context = {
         "driver": driver,
         "open_hot_leads": open_hot_leads,
+        "direct_requests": direct_requests,
+        "needs_email": not driver.email,
+        "push_enabled": settings.PUSH_NOTIFICATIONS_ENABLED,
+        "vapid_public_key": settings.VAPID_PUBLIC_KEY,
+        "has_push_subscription": driver.push_subscriptions.exists(),
+        "free_leads_left": driver.free_leads_left(),
+        "tab_balance": services.tab_balance(driver),
+        "tab_due": services.tab_is_due(driver),
+        "tab_pending": services.pending_settlement(driver),
+        "tab_limit": services.tab_limit(),
+        "wa_taps_30d": Lead.objects.filter(
+            kind=Lead.Kind.PASSIVE, driver_profile_viewed=driver,
+            created_at__gte=now - timedelta(days=30),
+        ).count(),
         "my_unlocked_leads": my_unlocked_leads,
         "pending_payments": pending_payments,
         "going_to_posts": going_to_posts,
@@ -163,7 +286,7 @@ def driver_dashboard(request):
     return render(request, "taxis/dashboard.html", context)
 
 
-@login_required
+@driver_required
 @require_POST
 def toggle_online(request):
     driver = request.user.driver
@@ -177,7 +300,7 @@ def toggle_online(request):
     return redirect("taxis:driver_dashboard")
 
 
-@login_required
+@driver_required
 def edit_profile(request):
     driver = request.user.driver
     if request.method == "POST":
@@ -191,76 +314,106 @@ def edit_profile(request):
     return render(request, "taxis/edit_profile.html", {"form": form})
 
 
-@login_required
-def unlock_lead(request, lead_id):
-    driver = request.user.driver
-    lead = get_object_or_404(Lead, id=lead_id, kind=Lead.Kind.HOT)
+UNLOCK_MESSAGES = {
+    Unlock.PRO: (messages.SUCCESS, "Unlocked (free with Pro). The passenger's number is under 'Your unlocked leads'."),
+    Unlock.TAKEN: (messages.WARNING, "This lead has already been taken or answered."),
+    Unlock.NOT_ALLOWED: (messages.ERROR, "You can't unlock that lead."),
+}
 
-    if not lead.is_open_for_unlock():
-        messages.warning(request, "This lead has already been taken.")
-        return redirect("taxis:driver_dashboard")
 
-    if driver.monthly_lead_cap_reached():
-        messages.warning(
-            request,
-            "You've used your free leads for this month. Go Pro for unlimited leads.",
-        )
-        return redirect("taxis:driver_dashboard")
+class UnlockLeadView(DriverRequiredMixin, View):
+    """One endpoint for every unlock. The rules (Pro / free quota / tab) live
+    in services.unlock_lead(); this only turns the outcome into a message."""
 
-    if request.method == "POST":
-        form = PaymentProofForm(request.POST, request.FILES)
-        if form.is_valid():
-            payment = form.save(commit=False)
-            payment.driver = driver
-            payment.purpose = Payment.Purpose.HOT_LEAD
-            payment.amount_usd = Decimal(settings.HOT_LEAD_PRICE_USD)
-            payment.related_lead = lead
-            payment.save()
+    http_method_names = ["post"]
+
+    def post(self, request, lead_id):
+        result = services.unlock_lead(lead_id, self.driver)
+
+        if result.outcome == Unlock.FREE_QUOTA:
+            left = self.driver.free_leads_left()
             messages.success(
                 request,
-                "Payment submitted. It will be confirmed shortly and the lead unlocked.",
+                f"Unlocked using a free lead ({left} left this month). "
+                "The passenger's number is under 'Your unlocked leads'.",
             )
-            return redirect("taxis:driver_dashboard")
-    else:
-        form = PaymentProofForm(initial={"method": Payment.Method.ECOCASH})
-
-    context = {
-        "form": form,
-        "lead": lead,
-        "amount": settings.HOT_LEAD_PRICE_USD,
-        "ecocash_merchant_number": settings.ECOCASH_MERCHANT_NUMBER,
-        "ecocash_merchant_name": settings.ECOCASH_MERCHANT_NAME,
-        "paynow_enabled": settings.PAYNOW_ENABLED,
-    }
-    return render(request, "taxis/unlock_lead.html", context)
-
-
-@login_required
-def claim_lead_pro(request, lead_id):
-    """Pro drivers unlock leads for free — no EcoCash step, no admin
-    confirmation needed. This is the main way manual involvement in lead
-    processing is minimised; see taxis/signals.py for the matching
-    notification half of the flow."""
-    driver = request.user.driver
-    lead = get_object_or_404(Lead, id=lead_id, kind=Lead.Kind.HOT)
-
-    if not driver.is_pro:
-        messages.warning(request, "Claiming leads for free is a Pro feature.")
+        elif result.outcome == Unlock.ON_TAB:
+            balance = services.tab_balance(self.driver)
+            messages.success(
+                request,
+                f"Unlocked. ${result.charged} added to your tab (now ${balance}). "
+                "The passenger's number is under 'Your unlocked leads'.",
+            )
+        elif result.outcome == Unlock.TAB_DUE:
+            messages.warning(
+                request,
+                f"Your tab (${services.tab_balance(self.driver)}) is due. "
+                "Settle it to keep unlocking leads.",
+            )
+            return redirect("taxis:tab")
+        else:
+            level, text = UNLOCK_MESSAGES[result.outcome]
+            messages.add_message(request, level, text)
         return redirect("taxis:driver_dashboard")
 
-    if not lead.is_open_for_unlock():
-        messages.warning(request, "This lead has already been taken.")
+
+class DeclineLeadView(DriverRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, lead_id):
+        if services.decline_direct_request(lead_id, self.driver):
+            messages.info(request, "Request declined. The passenger will see that you can't take it.")
+        else:
+            messages.warning(request, "That request can't be declined (already answered, or not yours).")
         return redirect("taxis:driver_dashboard")
 
-    lead.status = Lead.Status.UNLOCKED
-    lead.unlocked_by = driver
-    lead.unlocked_at = timezone.now()
-    lead.save(update_fields=["status", "unlocked_by", "unlocked_at"])
-    messages.success(request, "Lead claimed — the passenger's number is on your dashboard.")
-    return redirect("taxis:driver_dashboard")
+
+class TabView(DriverRequiredMixin, FormView):
+    """Running tab of unlocks made after the free quota. Settle any time;
+    it also falls due at TAB_LIMIT_USD or TAB_MAX_DAYS (see services.py)."""
+
+    template_name = "taxis/tab.html"
+    form_class = PaymentProofForm
+    success_url = reverse_lazy("taxis:driver_dashboard")
+
+    def get_initial(self):
+        return {"method": Payment.Method.ECOCASH}
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update({
+            "entries": services.unsettled_entries(self.driver).select_related("lead"),
+            "balance": services.tab_balance(self.driver),
+            "due": services.tab_is_due(self.driver),
+            "pending": services.pending_settlement(self.driver),
+            "can_settle": services.can_settle(self.driver),
+            "tab_limit": services.tab_limit(),
+            "tab_max_days": settings.TAB_MAX_DAYS,
+            "lead_price": services.lead_price(),
+            "free_cap": settings.FREE_TIER_LEAD_CAP,
+            "paynow_enabled": settings.PAYNOW_ENABLED,
+            "ecocash_merchant_number": settings.ECOCASH_MERCHANT_NUMBER,
+            "ecocash_merchant_name": settings.ECOCASH_MERCHANT_NAME,
+        })
+        return context
+
+    def form_valid(self, form):
+        if not services.can_settle(self.driver):
+            messages.info(self.request, "Nothing to settle right now, or a settlement is already awaiting confirmation.")
+            return redirect("taxis:tab")
+        payment = form.save(commit=False)
+        payment.driver = self.driver
+        payment.purpose = Payment.Purpose.TAB_SETTLEMENT
+        payment.amount_usd = services.tab_balance(self.driver)
+        payment.save()
+        messages.success(
+            self.request,
+            "Settlement submitted. You can keep unlocking leads while it's being confirmed.",
+        )
+        return super().form_valid(form)
 
 
-@login_required
+@driver_required
 def go_pro(request):
     driver = request.user.driver
     if request.method == "POST":
@@ -292,7 +445,7 @@ def go_pro(request):
     return render(request, "taxis/go_pro.html", context)
 
 
-@login_required
+@driver_required
 def post_going_to(request):
     driver = request.user.driver
     if not driver.is_pro and driver.monthly_going_to_cap_reached():
@@ -334,6 +487,11 @@ def admin_leads_dashboard(request):
             status=Lead.Status.UNLOCKED, unlocked_at__gte=today_start, unlocked_by__pro_until__gt=now
         ).count(),
         "active_pro_drivers": Driver.objects.filter(pro_until__gt=now).count(),
+        "direct_requests_today": Lead.objects.filter(kind=Lead.Kind.DIRECT, created_at__gte=today_start).count(),
+        "whatsapp_taps_today": Lead.objects.filter(kind=Lead.Kind.PASSIVE, created_at__gte=today_start).count(),
+        "tab_outstanding": TabEntry.objects.filter(settled_by__isnull=True).aggregate(
+            total=Sum("amount_usd")
+        )["total"] or Decimal("0.00"),
         "online_drivers": [d for d in Driver.objects.filter(is_active_listing=True) if d.is_online],
     }
     return render(request, "admin/leads_dashboard.html", context)
@@ -347,7 +505,26 @@ def faqs(request):
     return render(request, "taxis/faqs.html", {"faqs": faq_list, "audience": audience})
 
 
-@login_required
+def service_worker(request):
+    """Serve the service worker from the site root.
+
+    A worker served from /static/ can only control /static/*, so
+    navigator.serviceWorker.ready never resolves on /dashboard/ and the
+    "turn on notifications" button would hang. Serving it from / (with the
+    Service-Worker-Allowed header) gives it whole-site scope.
+    """
+    path = finders.find("service-worker.js")
+    if not path:
+        raise Http404("service-worker.js not found")
+    with open(path, encoding="utf-8") as fh:
+        content = fh.read()
+    response = HttpResponse(content, content_type="application/javascript")
+    response["Service-Worker-Allowed"] = "/"
+    response["Cache-Control"] = "no-cache"  # browsers must re-check for updates
+    return response
+
+
+@driver_required
 @require_POST
 def push_subscribe(request):
     """Called by the dashboard's 'Enable notifications' button (see app.js).
@@ -367,7 +544,7 @@ def push_subscribe(request):
     return JsonResponse({"status": "subscribed"})
 
 
-@login_required
+@driver_required
 @require_POST
 def push_unsubscribe(request):
     try:

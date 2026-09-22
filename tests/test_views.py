@@ -37,6 +37,7 @@ def test_driver_signup_creates_driver_and_logs_in(client):
     resp = client.post(reverse("taxis:driver_signup"), {
         "full_name": "New Driver",
         "phone_number": "0775333333",
+        "email": "newdriver@example.com",
         "password": "strongpass123",
         "car_type": "corolla",
         "car_reg": "NEW1234",
@@ -103,28 +104,6 @@ def test_request_taxi_creates_hot_lead(client):
     assert lead.status == Lead.Status.OPEN
 
 
-@pytest.mark.django_db
-def test_unlock_lead_submits_pending_payment(client, driver_user, hot_lead):
-    client.force_login(driver_user.user)
-    resp = client.post(
-        reverse("taxis:unlock_lead", args=[hot_lead.id]),
-        {"method": "ecocash", "ecocash_reference": "EC999"},
-    )
-    assert resp.status_code == 302
-    payment = Payment.objects.get(driver=driver_user, related_lead=hot_lead)
-    assert payment.status == Payment.Status.PENDING
-    # Lead stays open until admin confirms payment
-    hot_lead.refresh_from_db()
-    assert hot_lead.status == Lead.Status.OPEN
-
-
-@pytest.mark.django_db
-def test_unlock_lead_blocked_when_free_cap_reached(client, driver_user, hot_lead):
-    driver_user.leads_used_this_month = 3
-    driver_user.save()
-    client.force_login(driver_user.user)
-    resp = client.get(reverse("taxis:unlock_lead", args=[hot_lead.id]))
-    assert resp.status_code == 302  # redirected back to dashboard with warning
 
 
 @pytest.mark.django_db
@@ -135,3 +114,15 @@ def test_go_pro_submits_pending_payment(client, driver_user):
     })
     assert resp.status_code == 302
     assert Payment.objects.filter(driver=driver_user, purpose=Payment.Purpose.PRO_WEEKLY).exists()
+
+
+@pytest.mark.django_db
+def test_bookmark_prompt_markup_present_on_home(client):
+    """The banner itself is server-rendered (hidden by default); app.js
+    decides whether/when to reveal it, including skipping driver-only
+    pages by pathname — see static/js/app.js::initBookmarkPrompt."""
+    resp = client.get(reverse("taxis:home"))
+    assert b'id="bookmark-prompt"' in resp.content
+    assert b"hidden" in resp.content
+    assert b'id="bookmark-prompt-accept"' in resp.content
+    assert b'id="bookmark-prompt-dismiss"' in resp.content

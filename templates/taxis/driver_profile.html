@@ -10,7 +10,10 @@
 {% if driver.average_rating %}<p>&#9733; {{ driver.average_rating }} ({{ driver.reviews.count }} reviews)</p>{% endif %}
 {% if driver.route_list %}<p>Routes: {{ driver.route_list|join:", " }}</p>{% endif %}
 
-<a class="btn-wa" href="{{ wa_hail_link }}" target="_blank" rel="noopener" style="display:inline-block;width:auto;padding:0.6rem 1.2rem;">WhatsApp {{ driver.full_name }} now</a>
+<p class="cta-row">
+    <a class="btn-wa cta-inline" href="{% url 'taxis:direct_request' driver.slug %}">Message {{ driver.full_name }}</a>
+    <a class="btn-secondary cta-inline" href="{% url 'taxis:whatsapp_redirect' driver.slug %}" target="_blank" rel="noopener nofollow">WhatsApp instead</a>
+</p>
 
 <p style="margin-top:1rem;">
     <button onclick="copyShareText('{{ share_text|escapejs }}')">Share this profile</button>
@@ -26,7 +29,7 @@
 <p>No reviews yet.</p>
 {% endfor %}
 
-<h3>Leave a review</h3>
+<h3 id="review">Leave a review</h3>
 <form class="stack" method="post">
     {% csrf_token %}
     {{ review_form|crispy }}

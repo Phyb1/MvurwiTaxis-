@@ -3,6 +3,13 @@
 {% block content %}
 <h1>Welcome, {{ driver.full_name }}</h1>
 
+{% if needs_email %}
+<div class="message message-warning">
+    Add your email to get new-request alerts and to reset a forgotten password.
+    <a href="{% url 'taxis:edit_profile' %}">Add email &rarr;</a>
+</div>
+{% endif %}
+
 <form method="post" action="{% url 'taxis:toggle_online' %}">
     {% csrf_token %}
     {% if driver.is_online %}
@@ -13,36 +20,51 @@
 </form>
 
 <div class="dashboard-grid">
-    <div class="stat-card"><div class="value">{{ driver.leads_used_this_month }}</div>Leads this month</div>
     <div class="stat-card"><div class="value">{% if driver.is_pro %}PRO{% else %}FREE{% endif %}</div>Tier</div>
+    <div class="stat-card"><div class="value">{% if driver.is_pro %}&infin;{% else %}{{ free_leads_left }}{% endif %}</div>Free leads left this month</div>
+    <div class="stat-card">
+        <div class="value">${{ tab_balance }}</div>
+        On your tab{% if tab_due %} &middot; <strong>due</strong>{% endif %}
+        {% if tab_balance %}<br><a href="{% url 'taxis:tab' %}">{% if tab_pending %}Settlement pending{% else %}View &amp; settle{% endif %}</a>{% endif %}
+    </div>
+    <div class="stat-card"><div class="value">{{ wa_taps_30d }}</div>WhatsApp taps on your listing (30 days)</div>
     <div class="stat-card"><div class="value">{{ driver.average_rating|default:"–" }}</div>Rating</div>
 </div>
 
 {% if not driver.is_pro %}
-<p><a href="{% url 'taxis:go_pro' %}">Upgrade to Pro &rarr;</a></p>
+<p><a href="{% url 'taxis:go_pro' %}">Upgrade to Pro &rarr;</a> free lead unlocks, no tab.</p>
 {% endif %}
 
 {% if push_enabled %}
 <p>
     <button data-vapid-key="{{ vapid_public_key }}" data-csrf="{{ csrf_token }}"
             onclick="enablePushNotifications(this)">
-        Enable lead notifications on this device
+        {% if has_push_subscription %}Turn on notifications on this device too{% else %}Turn on request notifications{% endif %}
     </button>
+</p>
+<p class="form-text">
+    {% if has_push_subscription %}&#10003; Notifications are on for at least one of your devices. {% endif %}
+    On iPhone, first tap Share &rarr; Add to Home Screen, then open MvurwiTaxis from your home screen.
 </p>
 {% endif %}
 
-<h2>Open Hot Leads</h2>
+<h2>Requests sent to you</h2>
+{% for lead in direct_requests %}
+<div class="lead-card">
+    <p><strong>{{ lead.passenger_name }}</strong> &middot; {{ lead.pickup }} &rarr; {{ lead.destination }} &middot; {{ lead.people }} {{ lead.people|pluralize:"person,people" }} &middot; {{ lead.requested_time|default:"as soon as possible" }}</p>
+    {% if lead.message %}<p class="muted">&ldquo;{{ lead.message }}&rdquo;</p>{% endif %}
+    <p class="muted">{{ lead.created_at|timesince }} ago</p>
+    {% include "taxis/_unlock_actions.html" with lead=lead can_decline=True %}
+</div>
+{% empty %}
+<p>No requests waiting for you.</p>
+{% endfor %}
+
+<h2>Open hot leads</h2>
 {% for lead in open_hot_leads %}
 <div class="lead-card">
-    <p>{{ lead.pickup }} &rarr; {{ lead.destination }} &middot; {{ lead.people }} people &middot; {{ lead.requested_time }}</p>
-    {% if driver.is_pro %}
-    <form method="post" action="{% url 'taxis:claim_lead_pro' lead.id %}" style="display:inline;">
-        {% csrf_token %}
-        <button type="submit" class="btn">Claim free (Pro)</button>
-    </form>
-    {% else %}
-    <a href="{% url 'taxis:unlock_lead' lead.id %}">Pay ${{ hot_lead_price }} to unlock</a>
-    {% endif %}
+    <p><strong>{{ lead.passenger_name }}</strong> &middot; {{ lead.pickup }} &rarr; {{ lead.destination }} &middot; {{ lead.people }} {{ lead.people|pluralize:"person,people" }} &middot; {{ lead.requested_time|default:"as soon as possible" }}</p>
+    {% include "taxis/_unlock_actions.html" with lead=lead can_decline=False %}
 </div>
 {% empty %}
 <p>No open hot leads right now.</p>
@@ -51,7 +73,12 @@
 <h2>Your unlocked leads</h2>
 {% for lead in my_unlocked_leads %}
 <div class="lead-card">
-    <p>{{ lead.pickup }} &rarr; {{ lead.destination }} &middot; {{ lead.passenger_name }} &middot; {{ lead.passenger_phone }}</p>
+    <p><strong>{{ lead.passenger_name }}</strong> &middot; {{ lead.pickup }} &rarr; {{ lead.destination }}</p>
+    {% if lead.message %}<p class="muted">&ldquo;{{ lead.message }}&rdquo;</p>{% endif %}
+    <p>
+        <a href="tel:+{{ lead.passenger_phone }}">{{ lead.passenger_phone }}</a>
+        &middot; <a href="{{ lead.passenger_wa_link }}" target="_blank" rel="noopener">WhatsApp</a>
+    </p>
 </div>
 {% empty %}
 <p>None yet.</p>

@@ -1,0 +1,27 @@
+{% autoescape off %}Hi {{ driver.full_name }},
+
+Welcome to MvurwiTaxis. You're listed. Here are 6 quick steps to get your first passengers:
+
+1. Log in: {{ login_url }}
+   Your username is your phone number ({{ driver.phone_number }}).
+
+2. Add a clear photo of your car (Edit profile). Listings with a photo get more taps.
+
+3. Fill in your routes (e.g. Harare, Bindura, NOC). Passengers filter by destination, so this is how they find you.
+
+4. Turn on notifications. On your dashboard, tap "Turn on request notifications". You'll get an alert and an email the moment a passenger messages you. On iPhone, first add MvurwiTaxis to your home screen (Share, then Add to Home Screen).
+
+5. Tap GO ONLINE when you're free. It lasts about {{ online_window }} minutes, then you drop back to offline until you tap again. Online drivers are shown first.
+
+6. Share your profile link in your WhatsApp Status and groups: {{ profile_url }}
+
+How leads work
+- Passengers message you or send a general request. You see their name and trip first, and their phone number once you tap "Show number".
+- Your first {{ free_cap }} leads each month are free. After that each lead is ${{ lead_price }}, added to a running tab. Settle it whenever you like ({{ tab_url }}); it must be settled once it reaches ${{ tab_limit }} or is {{ tab_max_days }} days old.
+- Pro (${{ pro_weekly }}/week or ${{ pro_monthly }}/month) gives you free unlocks, no tab, and top placement.
+
+Stuck? {% if admin_wa_link %}WhatsApp the admin: {{ admin_wa_link }}{% else %}Reply to this email.{% endif %}
+
+Safe travels,
+MvurwiTaxis
+{% endautoescape %}

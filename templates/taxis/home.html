@@ -50,7 +50,8 @@
             <span class="status-offline">&#9679; Offline</span>
             {% endif %}
         </p>
-        <a class="btn-wa" href="{{ driver.whatsapp_link }}" target="_blank" rel="noopener">WhatsApp {{ driver.full_name }}</a>
+        <a class="btn-wa" href="{% url 'taxis:direct_request' driver.slug %}">Message {{ driver.full_name }}</a>
+        <a class="btn-secondary" href="{% url 'taxis:whatsapp_redirect' driver.slug %}" target="_blank" rel="noopener nofollow">WhatsApp</a>
         <a href="{% url 'taxis:driver_profile' driver.slug %}">View profile</a>
     </div>
     {% empty %}

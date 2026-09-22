@@ -1,0 +1,20 @@
+{# Unlock (and optionally decline) buttons for one lead. The label tells the driver what it will cost THEM: #}
+{# Pro = free, free quota left = free, quota used = added to the tab, tab due = settle first. #}
+{% if tab_due and not driver.is_pro and free_leads_left == 0 %}
+<a class="btn" href="{% url 'taxis:tab' %}">Settle your tab to unlock</a>
+{% else %}
+<form method="post" action="{% url 'taxis:unlock_lead' lead.id %}" class="inline-form">
+    {% csrf_token %}
+    <button type="submit" class="btn">
+        {% if driver.is_pro %}Show number (free with Pro)
+        {% elif free_leads_left > 0 %}Show number ({{ free_leads_left }} free left)
+        {% else %}Show number (+${{ hot_lead_price }} to tab){% endif %}
+    </button>
+</form>
+{% endif %}
+{% if can_decline %}
+<form method="post" action="{% url 'taxis:decline_lead' lead.id %}" class="inline-form">
+    {% csrf_token %}
+    <button type="submit" class="btn-secondary">Can't take it</button>
+</form>
+{% endif %}

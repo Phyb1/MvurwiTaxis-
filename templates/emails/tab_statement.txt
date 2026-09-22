@@ -1,0 +1,13 @@
+{% autoescape off %}Hi {{ driver.full_name }},
+
+Your MvurwiTaxis tab stands at ${{ balance }}.
+
+{% for entry in entries %}- {{ entry.created_at|date:"j M" }}: ${{ entry.amount_usd }}{% if entry.lead %} ({{ entry.lead.pickup }} to {{ entry.lead.destination }}){% endif %}
+{% endfor %}
+Settle it any time here: {{ tab_url }}
+A tab must be settled once it reaches ${{ tab_limit }} or is {{ tab_max_days }} days old, otherwise new unlocks pause until it's paid.
+
+{% if admin_wa_link %}Questions? WhatsApp the admin: {{ admin_wa_link }}{% endif %}
+
+MvurwiTaxis
+{% endautoescape %}

@@ -3,8 +3,8 @@
 {% block title %}Request a Taxi{% endblock %}
 {% block content %}
 <h1>Request Any Taxi</h1>
-<p>We'll notify all online drivers. A driver pays a small fee to unlock your number, so expect a WhatsApp call shortly.</p>
-<form class="stack" method="post">
+<p>We alert the drivers. The driver who takes your request gets your number and contacts you. You'll get a private link to follow the status.</p>
+<form class="stack" method="post" novalidate>
     {% csrf_token %}
     {{ form|crispy }}
     <button type="submit">Send request</button>

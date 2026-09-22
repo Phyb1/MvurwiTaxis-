@@ -1,62 +1,81 @@
 """
-Lead-notification signal. Cuts manual involvement two ways:
-1. Pro drivers are emailed the instant a hot lead is created — they don't
-   have to keep the dashboard open and refresh it.
-2. Pro drivers claim leads for free (see Driver.PRO_LEADS_BUNDLED_FREE /
-   views.claim_lead_pro) — no EcoCash proof-of-payment step, so admin
-   never has to confirm a payment for a lead a Pro driver takes.
-Free-tier drivers still go through manual EcoCash confirmation, since
-there's no live payment-gateway API wired up yet (see README "not built
-yet"). That's the only place admin involvement remains.
-"""
-import logging
+Lead notifications. Two flows:
 
-from django.conf import settings
-from django.core.mail import send_mail
+1. HOT ("Request Any Taxi"): Pro drivers are alerted the instant it's created
+   and can unlock it for free from the dashboard — no need to keep the page
+   open and refresh it.
+2. DIRECT (passenger messaged ONE driver): that driver is alerted by push +
+   email regardless of tier. The alert carries the passenger's name, route
+   and message but never their phone number — the number is only revealed
+   by unlocking (see taxis/services.py for the cost rules).
+
+Alerts are best-effort: notify_driver() swallows and logs failures so a dead
+SMTP server or stale push subscription can't break the passenger's request.
+"""
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
 from taxis.models import Driver, Lead
-from taxis.utils.push import send_push
-
-logger = logging.getLogger("taxis")
+from taxis.services import describe_unlock_cost
+from taxis.utils.notify import absolute_url, notify_driver
 
 
 @receiver(post_save, sender=Lead)
-def notify_pro_drivers_of_new_hot_lead(sender, instance, created, **kwargs):
-    if not created or instance.kind != Lead.Kind.HOT:
+def notify_on_new_lead(sender, instance, created, **kwargs):
+    if not created:
         return
+    if instance.kind == Lead.Kind.HOT:
+        _notify_pro_drivers_of_hot_lead(instance)
+    elif instance.kind == Lead.Kind.DIRECT:
+        _notify_target_driver(instance)
 
+
+def _notify_pro_drivers_of_hot_lead(lead):
     pro_drivers = Driver.objects.filter(
         pro_until__gt=timezone.now(), is_active_listing=True,
     ).prefetch_related("push_subscriptions")
 
-    if not pro_drivers.exists():
+    subject = f"New hot lead: {lead.pickup} -> {lead.destination}"
+    body = (
+        f"{lead.passenger_name} needs a taxi from {lead.pickup} to {lead.destination} "
+        f"({lead.people} people, {lead.requested_time or 'time not given'}).\n\n"
+        f"As a Pro driver you can unlock it for free from your dashboard - "
+        f"first to unlock gets the passenger's number.\n"
+        f"{absolute_url('/dashboard/')}"
+    )
+    push_body = f"{lead.pickup} -> {lead.destination}, {lead.people} people. Tap to unlock."
+    for driver in pro_drivers:
+        notify_driver(
+            driver, subject=subject, body=body,
+            push_title="New hot lead", push_body=push_body,
+        )
+
+
+def _notify_target_driver(lead):
+    driver = lead.target_driver
+    if driver is None:
         return
 
-    subject = f"New hot lead: {instance.pickup} -> {instance.destination}"
-    body = (
-        f"A passenger needs a taxi from {instance.pickup} to {instance.destination} "
-        f"({instance.people} people, {instance.requested_time or 'time not given'}).\n\n"
-        f"As a Pro driver you can claim it for free from your dashboard — "
-        f"first to claim gets the passenger's number.\n"
-        f"{settings.SITE_DOMAIN}"
+    lines = [
+        f"{lead.passenger_name} sent you a request on MvurwiTaxis.",
+        "",
+        f"From: {lead.pickup}",
+        f"To: {lead.destination}",
+        f"People: {lead.people}",
+        f"When: {lead.requested_time or 'not given'}",
+    ]
+    if lead.message:
+        lines.append(f"Message: {lead.message}")
+    lines += [
+        "",
+        describe_unlock_cost(driver),
+        f"Open your dashboard to see their number and reply: {absolute_url('/dashboard/')}",
+    ]
+    notify_driver(
+        driver,
+        subject=f"New request from {lead.passenger_name}: {lead.pickup} -> {lead.destination}",
+        body="\n".join(lines),
+        push_title=f"Request from {lead.passenger_name}",
+        push_body=f"{lead.pickup} -> {lead.destination}, {lead.people} people. Tap to open.",
     )
-    recipients_with_email = [d for d in pro_drivers if d.email]
-    if recipients_with_email:
-        try:
-            send_mail(
-                subject, body, settings.DEFAULT_FROM_EMAIL,
-                [d.email for d in recipients_with_email], fail_silently=False,
-            )
-        except Exception:
-            # Never let a notification failure break lead creation for the
-            # passenger — log it and move on.
-            logger.exception("Failed to send hot-lead notification email to pro drivers")
-
-    if settings.PUSH_NOTIFICATIONS_ENABLED:
-        push_body = f"{instance.pickup} -> {instance.destination}, {instance.people} people. Tap to claim."
-        for driver in pro_drivers:
-            for subscription in driver.push_subscriptions.all():
-                send_push(subscription, title="New hot lead", body=push_body, url="/dashboard/")

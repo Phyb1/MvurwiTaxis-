@@ -2,7 +2,7 @@
 // hand-written, dependency-free JS.
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-        navigator.serviceWorker.register("/static/service-worker.js").catch(() => {
+        navigator.serviceWorker.register("/service-worker.js", { scope: "/" }).catch(() => {
             // Silent fail: PWA install is a nice-to-have, not a blocker.
         });
     });
@@ -54,11 +54,12 @@ async function enablePushNotifications(button) {
             userVisibleOnly: true,
             applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
         });
-        await fetch("/push/subscribe/", {
+        const response = await fetch("/push/subscribe/", {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken },
             body: JSON.stringify(subscription.toJSON()),
         });
+        if (!response.ok) throw new Error("Server rejected the subscription");
         button.textContent = "Notifications enabled";
         button.disabled = true;
     } catch (err) {
@@ -71,3 +72,86 @@ function copyShareText(text) {
         alert("Copied! Paste it into your WhatsApp Status or a group.");
     });
 }
+
+// "Bookmark this site" banner (templates/base.html#bookmark-prompt).
+// There's no browser API to open the native bookmark dialog (unlike
+// beforeinstallprompt for PWA install above), so this is a nudge with
+// platform-specific instructions, not a one-tap action.
+(function initBookmarkPrompt() {
+    const DISMISS_KEY = "mvurwitaxis:bookmark-prompt-dismissed-until";
+    const DISMISS_DAYS_NOT_NOW = 30;   // ask again in a month
+    const DISMISS_DAYS_ACCEPTED = 365; // they said "Got it" — stop asking
+    const SHOW_AFTER_MS = 12000;
+    // Driver-only pages: drivers already return via login, don't nag them.
+    const SKIP_PATH_PREFIXES = ["/dashboard/", "/login/", "/signup/", "/admin"];
+
+    function isStandalone() {
+        return (
+            window.matchMedia("(display-mode: standalone)").matches ||
+            window.navigator.standalone === true // iOS Safari home-screen launch
+        );
+    }
+
+    function isDismissed() {
+        const until = Number(localStorage.getItem(DISMISS_KEY) || 0);
+        return Date.now() < until;
+    }
+
+    function dismiss(days) {
+        const until = Date.now() + days * 24 * 60 * 60 * 1000;
+        try {
+            localStorage.setItem(DISMISS_KEY, String(until));
+        } catch (e) {
+            // Private browsing may block localStorage writes — banner will
+            // just reappear next visit, which is an acceptable fallback.
+        }
+    }
+
+    function hintText() {
+        const ua = navigator.userAgent;
+        const isMac = /Macintosh/.test(ua) && !/iPhone|iPad/.test(ua);
+        const isIOS = /iPhone|iPad|iPod/.test(ua);
+        const isAndroid = /Android/.test(ua);
+        if (isIOS) return "Tap Share, then \"Add to Home Screen\".";
+        if (isAndroid) return "Tap the menu (\u22ee), then \"Add to Home screen\".";
+        if (isMac) return "Press Cmd+D to bookmark this page.";
+        return "Press Ctrl+D to bookmark this page.";
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const banner = document.getElementById("bookmark-prompt");
+        if (!banner) return;
+
+        const path = window.location.pathname;
+        if (SKIP_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))) return;
+        if (isStandalone() || isDismissed()) return;
+
+        window.setTimeout(() => {
+            const hint = document.getElementById("bookmark-prompt-hint");
+            if (hint) hint.textContent = hintText();
+            banner.hidden = false;
+        }, SHOW_AFTER_MS);
+
+        const dismissBtn = document.getElementById("bookmark-prompt-dismiss");
+        if (dismissBtn) {
+            dismissBtn.addEventListener("click", () => {
+                banner.hidden = true;
+                dismiss(DISMISS_DAYS_NOT_NOW);
+            });
+        }
+
+        // "Got it": on Chrome/Android with an install prompt already
+        // captured (see beforeinstallprompt above), actually trigger it —
+        // that's the closest thing to a one-tap "save this" action that
+        // exists. Everywhere else there's no browser API for it, so this
+        // just acknowledges the on-screen instructions and stops asking.
+        const acceptBtn = document.getElementById("bookmark-prompt-accept");
+        if (acceptBtn) {
+            acceptBtn.addEventListener("click", () => {
+                if (deferredInstallPrompt) installApp();
+                banner.hidden = true;
+                dismiss(DISMISS_DAYS_ACCEPTED);
+            });
+        }
+    });
+})();

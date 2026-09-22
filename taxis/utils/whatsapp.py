@@ -26,11 +26,14 @@ def build_wa_link(phone_number: str, message: str = "") -> str:
     return url
 
 
-def hail_message(destination: str, pickup: str = "") -> str:
+def hail_message(destination: str = "", pickup: str = "") -> str:
     pickup_part = f" from {pickup}" if pickup else ""
-    return (
-        f"Hi, I saw you on MvurwiTaxis. Need a taxi{pickup_part} to {destination}."
-    )
+    destination_part = f" to {destination}" if destination else ""
+    return f"Hi, I saw you on MvurwiTaxis. Need a taxi{pickup_part}{destination_part}."
+
+
+def admin_help_message() -> str:
+    return "Hi MvurwiTaxis admin, I need help with: "
 
 
 def share_profile_message(profile_url: str) -> str:

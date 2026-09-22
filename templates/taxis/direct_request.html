@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% block title %}Message {{ driver.full_name }}{% endblock %}
+{% block content %}
+<h1>Message {{ driver.full_name }}</h1>
+<p class="muted">{{ driver.get_car_type_display }} &middot; {{ driver.car_reg }} &middot; {{ driver.seats }} seats{% if driver.is_online %} &middot; <span class="status-online">&#9679; Available now</span>{% endif %}</p>
+<p>Tell {{ driver.full_name }} where you're going. They get an alert straight away and reply to you directly. You'll get a private link to check the status.</p>
+<form class="stack" method="post" novalidate>
+    {% csrf_token %}
+    {{ form|crispy }}
+    <button type="submit">Send to {{ driver.full_name }}</button>
+</form>
+<p class="muted" style="margin-top:1rem;">
+    Prefer WhatsApp? <a href="{% url 'taxis:whatsapp_redirect' driver.slug %}" target="_blank" rel="noopener nofollow">Open a WhatsApp chat instead</a>
+    &middot; <a href="{% url 'taxis:driver_profile' driver.slug %}">Back to profile</a>
+</p>
+{% endblock %}

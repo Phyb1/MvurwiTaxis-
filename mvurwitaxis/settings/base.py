@@ -52,6 +52,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "taxis.context_processors.site_contact",
             ],
         },
     },
@@ -120,6 +121,27 @@ PRO_MONTHLY_PRICE_USD = "10.00"
 GOING_TO_PIN_PRICE_USD = "0.50"
 FREE_TIER_LEAD_CAP = 3
 FREE_TIER_GOING_TO_CAP = 1
+
+# --- Tab (post-paid unlocks) ---
+# Once a free-tier driver has used their FREE_TIER_LEAD_CAP free leads for the
+# month, each further unlock is charged HOT_LEAD_PRICE_USD to a running tab
+# instead of blocking on manual payment. The tab falls due when it reaches
+# TAB_LIMIT_USD or when its oldest unsettled charge is TAB_MAX_DAYS old
+# (whichever comes first); until it's settled, further unlocks pause.
+TAB_LIMIT_USD = "1.00"
+TAB_MAX_DAYS = 7
+
+# --- Direct requests (passenger -> one specific driver) ---
+# After this long with no unlock/decline, the passenger's status page
+# suggests WhatsApp / another driver instead of waiting forever.
+DIRECT_REQUEST_REPLY_MINUTES = 30
+# Anti-spam: the form is public and triggers push + email to a driver.
+DIRECT_REQUEST_DUPLICATE_MINUTES = 10   # same phone -> same driver
+DIRECT_REQUEST_HOURLY_LIMIT = 5         # same phone -> any driver, per hour
+
+# A WhatsApp tap from the same browser session within this window is logged
+# once, not once per tap.
+PASSIVE_CLICK_DEDUPE_MINUTES = 10
 ONLINE_STATUS_WINDOW_MINUTES = 30
 # Pro drivers already pay a subscription, so hot leads are bundled in free
 # for them — no per-lead EcoCash step. This is the main lever for cutting

@@ -1,3 +1,6 @@
+import uuid
+from datetime import timedelta
+
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -113,6 +116,11 @@ class Driver(models.Model):
             return False
         return self.leads_used_this_month >= settings.FREE_TIER_LEAD_CAP
 
+    def free_leads_left(self):
+        """Free unlocks remaining this month (Pro drivers: unlimited, see is_pro)."""
+        self._maybe_reset_monthly_counters()
+        return max(settings.FREE_TIER_LEAD_CAP - self.leads_used_this_month, 0)
+
     def monthly_going_to_cap_reached(self):
         self._maybe_reset_monthly_counters()
         if self.is_pro:
@@ -152,16 +160,25 @@ class Fare(models.Model):
 
 
 class Lead(models.Model):
-    """A passenger request. Passive leads are untracked WhatsApp clicks;
-    Hot leads are logged requests that a driver pays to unlock."""
+    """A passenger request.
+
+    - PASSIVE: a tracked WhatsApp tap on a driver's button (no passenger data).
+    - HOT: "Request Any Taxi" — broadcast to every driver; first to unlock wins.
+    - DIRECT: a message request to ONE driver (``target_driver``); only that
+      driver can unlock or decline it.
+    Drivers see the passenger's name/route up front; the phone number is only
+    revealed once the lead is unlocked (see taxis/services.py for the rules).
+    """
 
     class Kind(models.TextChoices):
         PASSIVE = "passive", "Passive"
         HOT = "hot", "Hot"
+        DIRECT = "direct", "Direct message"
 
     class Status(models.TextChoices):
         OPEN = "open", "Open"
         UNLOCKED = "unlocked", "Unlocked"
+        DECLINED = "declined", "Declined"
         EXPIRED = "expired", "Expired"
 
     kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.HOT)
@@ -173,6 +190,19 @@ class Lead(models.Model):
     destination = models.CharField(max_length=120)
     people = models.PositiveSmallIntegerField(default=1)
     requested_time = models.CharField(max_length=80, blank=True, help_text="Free text, e.g. 'Now', '2pm'")
+    message = models.CharField(
+        max_length=300, blank=True,
+        help_text="Optional note from the passenger to the driver.",
+    )
+    token = models.UUIDField(
+        default=uuid.uuid4, editable=False, unique=True,
+        help_text="Private key for the passenger's status link, so the lead id is never exposed in URLs.",
+    )
+    target_driver = models.ForeignKey(
+        "Driver", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="direct_requests",
+        help_text="Set only for direct requests a passenger sends to one specific driver.",
+    )
 
     driver_profile_viewed = models.ForeignKey(
         Driver, on_delete=models.SET_NULL, null=True, blank=True,
@@ -193,7 +223,30 @@ class Lead(models.Model):
         return f"{self.get_kind_display()} lead: {self.pickup} -> {self.destination}"
 
     def is_open_for_unlock(self):
-        return self.kind == self.Kind.HOT and self.status == self.Status.OPEN
+        return self.kind in (self.Kind.HOT, self.Kind.DIRECT) and self.status == self.Status.OPEN
+
+    @property
+    def is_direct(self):
+        return self.kind == self.Kind.DIRECT
+
+    @property
+    def passenger_wa_link(self):
+        """WhatsApp deep link to the passenger. Only ever rendered for the
+        driver who unlocked the lead (see templates/taxis/dashboard.html)."""
+        from taxis.utils.whatsapp import build_wa_link
+        text = (
+            f"Hi {self.passenger_name}, I got your MvurwiTaxis request "
+            f"({self.pickup} to {self.destination})."
+        )
+        return build_wa_link(self.passenger_phone, text)
+
+    @property
+    def reply_overdue(self):
+        """Still unanswered after DIRECT_REQUEST_REPLY_MINUTES."""
+        if self.status != self.Status.OPEN:
+            return False
+        waited = timezone.now() - self.created_at
+        return waited >= timedelta(minutes=settings.DIRECT_REQUEST_REPLY_MINUTES)
 
 
 class Payment(models.Model):
@@ -205,6 +258,7 @@ class Payment(models.Model):
         PRO_WEEKLY = "pro_weekly", "Pro Subscription (Weekly)"
         PRO_MONTHLY = "pro_monthly", "Pro Subscription (Monthly)"
         GOING_TO_PIN = "going_to_pin", "Going-To Pin"
+        TAB_SETTLEMENT = "tab_settlement", "Tab Settlement"
 
     class Method(models.TextChoices):
         ECOCASH = "ecocash", "EcoCash (manual)"
@@ -276,6 +330,13 @@ class Payment(models.Model):
             self._extend_pro(days=7)
         elif self.purpose == self.Purpose.PRO_MONTHLY:
             self._extend_pro(days=30)
+        elif self.purpose == self.Purpose.TAB_SETTLEMENT:
+            # Settles everything the driver owed when they submitted this
+            # payment. Charges added afterwards (created_at > payment.created_at)
+            # stay on the tab — the admin confirming late never wipes them.
+            TabEntry.objects.filter(
+                driver=self.driver, settled_by__isnull=True, created_at__lte=self.created_at,
+            ).update(settled_by=self)
 
     def confirm(self):
         """Convenience method for callers that just want to mark a payment
@@ -291,6 +352,29 @@ class Payment(models.Model):
         base = self.driver.pro_until if self.driver.pro_until and self.driver.pro_until > now else now
         self.driver.pro_until = base + timezone.timedelta(days=days)
         self.driver.save(update_fields=["pro_until"])
+
+
+class TabEntry(models.Model):
+    """One charge on a driver's tab: a lead unlocked after their free quota
+    ran out. Settled in bulk by a confirmed TAB_SETTLEMENT payment."""
+
+    driver = models.ForeignKey(Driver, on_delete=models.CASCADE, related_name="tab_entries")
+    lead = models.ForeignKey(
+        Lead, on_delete=models.SET_NULL, null=True, blank=True, related_name="tab_entries"
+    )
+    amount_usd = models.DecimalField(max_digits=6, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    settled_by = models.ForeignKey(
+        Payment, on_delete=models.SET_NULL, null=True, blank=True, related_name="settled_tab_entries"
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name_plural = "tab entries"
+
+    def __str__(self):
+        state = "settled" if self.settled_by_id else "unsettled"
+        return f"{self.driver} - ${self.amount_usd} ({state})"
 
 
 class GoingToPost(models.Model):

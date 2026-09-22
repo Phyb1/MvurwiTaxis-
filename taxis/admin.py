@@ -1,6 +1,8 @@
 from django.contrib import admin, messages
 
-from taxis.models import FAQ, Driver, Fare, GoingToPost, Lead, Payment, PushSubscription, Review
+from taxis.models import (
+    FAQ, Driver, Fare, GoingToPost, Lead, Payment, PushSubscription, Review, TabEntry,
+)
 
 # Adds a "Leads & Payments Dashboard" link to the top of the admin index.
 # Uses a differently-named template (custom_index.html) that itself extends
@@ -41,9 +43,13 @@ class FareAdmin(admin.ModelAdmin):
 
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):
-    list_display = ("kind", "pickup", "destination", "status", "unlocked_by", "created_at")
+    list_display = (
+        "kind", "passenger_name", "pickup", "destination", "status",
+        "target_driver", "unlocked_by", "created_at",
+    )
     list_filter = ("kind", "status")
     search_fields = ("passenger_name", "passenger_phone", "pickup", "destination")
+    readonly_fields = ("token", "created_at")
 
 
 @admin.register(Payment)
@@ -85,3 +91,10 @@ class FAQAdmin(admin.ModelAdmin):
 class PushSubscriptionAdmin(admin.ModelAdmin):
     list_display = ("driver", "created_at")
     search_fields = ("driver__full_name",)
+
+
+@admin.register(TabEntry)
+class TabEntryAdmin(admin.ModelAdmin):
+    list_display = ("driver", "amount_usd", "lead", "created_at", "settled_by")
+    list_filter = (("settled_by", admin.EmptyFieldListFilter),)
+    search_fields = ("driver__full_name", "driver__phone_number")

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Your request{% endblock %}
+{% block head_extra %}{% if lead.status == "open" %}<meta http-equiv="refresh" content="30">{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if lead.is_direct and lead.target_driver %}Request to {{ lead.target_driver.full_name }}{% else %}Request sent to drivers{% endif %}</h1>
+
+<div class="lead-card">
+    <p><strong>{{ lead.pickup }} &rarr; {{ lead.destination }}</strong></p>
+    <p class="muted">{{ lead.people }} {{ lead.people|pluralize:"person,people" }} &middot; {{ lead.requested_time|default:"as soon as possible" }}</p>
+    {% if lead.message %}<p class="muted">&ldquo;{{ lead.message }}&rdquo;</p>{% endif %}
+</div>
+
+{% if lead.status == "open" %}
+    {% if lead.reply_overdue %}
+    <p><strong>No reply yet.</strong> The driver may be busy or offline.</p>
+    <p>
+        {% if lead.is_direct and lead.target_driver %}
+        <a class="btn-wa cta-inline" href="{% url 'taxis:whatsapp_redirect' lead.target_driver.slug %}" target="_blank" rel="noopener nofollow">WhatsApp {{ lead.target_driver.full_name }}</a>
+        {% endif %}
+        <a class="btn-secondary cta-inline" href="{% url 'taxis:home' %}">Choose another taxi</a>
+    </p>
+    {% else %}
+    <p><strong>Waiting for {% if lead.is_direct and lead.target_driver %}{{ lead.target_driver.full_name }}{% else %}a driver{% endif %} to answer&hellip;</strong></p>
+    <p class="muted">This page refreshes by itself. Keep it open, or bookmark it and come back.</p>
+    {% endif %}
+{% elif lead.status == "unlocked" %}
+    <p><strong>{% if lead.unlocked_by %}{{ lead.unlocked_by.full_name }}{% else %}A driver{% endif %} has taken your request.</strong>
+       They'll contact you on the number you gave ({{ lead.passenger_phone }}).</p>
+    {% if lead.unlocked_by %}
+    <p>
+        <a class="btn-secondary cta-inline" href="{% url 'taxis:whatsapp_redirect' lead.unlocked_by.slug %}" target="_blank" rel="noopener nofollow">Message them on WhatsApp</a>
+        <a class="btn-secondary cta-inline" href="{% url 'taxis:driver_profile' lead.unlocked_by.slug %}">View driver &amp; leave a review</a>
+    </p>
+    {% endif %}
+{% elif lead.status == "declined" %}
+    <p><strong>{{ lead.target_driver.full_name|default:"The driver" }} can't take this trip.</strong></p>
+    <p>
+        <a class="btn-wa cta-inline" href="{% url 'taxis:home' %}">Choose another taxi</a>
+        <a class="btn-secondary cta-inline" href="{% url 'taxis:request_taxi' %}">Request any taxi</a>
+    </p>
+{% else %}
+    <p>This request has expired. <a href="{% url 'taxis:request_taxi' %}">Send a new one</a>.</p>
+{% endif %}
+<p class="muted"><a href="{% url 'taxis:home' %}">&larr; Back to directory</a></p>
+{% endblock %}
