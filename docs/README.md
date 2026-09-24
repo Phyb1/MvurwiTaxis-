@@ -1,21 +1,27 @@
-# MvurwiTaxis — Business Docs
+# MvurwiTaxis — 14-Day Driver Marketing Pack v2
 
-Operating documents for running MvurwiTaxis as an income stream, not just
-a codebase. These are living documents — edit them as reality diverges
-from the plan.
+Created around the current MvurwiTaxis product:
+- 5 taxis currently listed
+- Passenger directory
+- Direct driver messaging
+- WhatsApp contact
+- Request Any Taxi
+- Hot Leads
+- Go Online / availability
+- Push/email notifications
+- Verified driver status
+- Free driver listing
+- 3 free leads/month
+- Pro: $3/week or $10/month
 
-- [`marketing-plan.md`](./marketing-plan.md) — how you get the first 20
-  drivers and enough passenger awareness that drivers see leads.
-- [`operations-daily.md`](./operations-daily.md) — what admin actually
-  does each day to keep the platform trustworthy.
-- [`onboarding.md`](./onboarding.md) — the driver signup script and
-  passenger-facing explainer.
-- [`growth.md`](./growth.md) — what to watch, when to raise prices, when
-  to expand beyond Mvurwi.
+## Files
+01_14_day_campaign.md — strategy and daily execution
+02_14_day_post_copy.md — ready-to-post copy
+03_driver_dm_variants.md — direct recruitment messages
+04_whatsapp_status_bank.md — short status posts
+05_homepage_messaging.md — homepage hero recommendation
+06_social_graphic_explained.md — explanation of social graphics
+PNG files — 10 posters + 2 infographics
 
-## The one number that matters early on
-
-Drivers won't pay for a platform with no leads. Passengers won't use a
-directory with no drivers. Cold-start risk is the single biggest threat
-to this business — everything in these docs is ordered to attack that
-first.
+## Brand direction
+Use the dark background + lime/green accent style visible in the current MvurwiTaxis homepage screenshot. Keep the actual product claims accurate and avoid promising guaranteed passenger volume or income.
