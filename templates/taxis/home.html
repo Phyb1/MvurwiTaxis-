@@ -1,61 +1,239 @@
 {% extends "base.html" %}
-{% block title %}Find a Taxi{% endblock %}
+
+{% block title %}Find a Taxi in Mvurwi{% endblock %}
+
 {% block content %}
-<h1>Taxis available in Mvurwi</h1>
-<p><a href="{% url 'taxis:request_taxi' %}" class="btn-wa" style="display:inline-block;width:auto;">Request Any Taxi &rarr;</a></p>
+
+<section class="hero">
+    <h1>Find a Taxi in Mvurwi</h1>
+
+    <p class="hero-copy">
+        Browse local taxi drivers, check availability, and contact a driver directly.
+    </p>
+
+    <p>
+        <a href="{% url 'taxis:request_taxi' %}"
+           class="btn-wa"
+           style="display:inline-block;width:auto;">
+            Request Any Taxi &rarr;
+        </a>
+    </p>
+
+    <p class="driver-cta">
+        Are you a taxi driver in Mvurwi?
+        <a href="{% url 'taxis:driver_signup' %}">
+            List your taxi
+        </a>
+    </p>
+</section>
+
 
 {% if going_to_posts %}
 <h2 class="filters-heading">Drivers going out now</h2>
+
 <div class="going-to-banner">
     {% for post in going_to_posts %}
     <div class="going-to-card">
-        <strong>{{ post.driver.full_name }}</strong> is going to <strong>{{ post.destination }}</strong><br>
-        {{ post.departure_text }} &middot; {{ post.seats_available }} seats &middot; ${{ post.price_usd }}
-        <br><a href="{% url 'taxis:driver_profile' post.driver.slug %}">View profile</a>
+        <strong>{{ post.driver.full_name }}</strong>
+        is going to
+        <strong>{{ post.destination }}</strong>
+        <br>
+
+        {{ post.departure_text }}
+        &middot;
+        {{ post.seats_available }} seats
+        &middot;
+        ${{ post.price_usd }}
+
+        <br>
+
+        <a href="{% url 'taxis:driver_profile' post.driver.slug %}">
+            View profile
+        </a>
     </div>
     {% endfor %}
 </div>
 {% endif %}
 
-<h2 class="filters-heading">Filter taxis</h2>
+
+<h2 class="filters-heading">Find a taxi</h2>
+
 <form class="filters" method="get">
-    <input type="text" name="destination" placeholder="Destination" value="{{ filters.destination }}">
+
+    <input
+        type="text"
+        name="destination"
+        placeholder="Destination"
+        value="{{ filters.destination }}"
+    >
+
     <select name="car_type">
         <option value="">Any car</option>
+
         {% for value, label in car_types %}
-        <option value="{{ value }}" {% if filters.car_type == value %}selected{% endif %}>{{ label }}</option>
+        <option
+            value="{{ value }}"
+            {% if filters.car_type == value %}selected{% endif %}
+        >
+            {{ label }}
+        </option>
         {% endfor %}
     </select>
-    <input type="number" name="seats" placeholder="Min seats" value="{{ filters.seats }}" min="1">
-    <label><input type="checkbox" name="online_only" value="1" {% if filters.online_only %}checked{% endif %}> Available now</label>
+
+    <input
+        type="number"
+        name="seats"
+        placeholder="Min seats"
+        value="{{ filters.seats }}"
+        min="1"
+    >
+
+    <label>
+        <input
+            type="checkbox"
+            name="online_only"
+            value="1"
+            {% if filters.online_only %}checked{% endif %}
+        >
+        Available now
+    </label>
+
     <button type="submit">Filter</button>
+
 </form>
 
-<h2 class="driver-list-heading">{{ drivers|length }} taxi{{ drivers|length|pluralize }} listed</h2>
+
+<h2 class="driver-list-heading">
+    {{ drivers|length }}
+    taxi{{ drivers|length|pluralize }}
+    listed
+</h2>
+
+
 <div class="driver-grid">
+
     {% for driver in drivers %}
+
     <div class="driver-card">
+
         {% if driver.photo %}
-        <img class="car-photo" src="{{ driver.photo.url }}" alt="{{ driver.full_name }}'s {{ driver.get_car_type_display }}">
+        <img
+            class="car-photo"
+            src="{{ driver.photo.url }}"
+            alt="{{ driver.full_name }}'s {{ driver.get_car_type_display }}"
+        >
         {% endif %}
-        {% if driver.is_pro %}<span class="badge">PRO</span>{% endif %}
-        {% if driver.is_verified %}<span class="badge">VERIFIED</span>{% endif %}
+
+
+        {% if driver.is_pro %}
+        <span class="badge">PRO</span>
+        {% endif %}
+
+
+        {% if driver.is_verified %}
+        <span class="badge">VERIFIED</span>
+        {% endif %}
+
+
         <h3>{{ driver.full_name }}</h3>
-        <p>{{ driver.get_car_type_display }} &middot; {{ driver.car_reg }} &middot; {{ driver.seats }} seats</p>
-        {% if driver.average_rating %}<p>&#9733; {{ driver.average_rating }}</p>{% endif %}
+
+
+        <p>
+            {{ driver.get_car_type_display }}
+            &middot;
+            {{ driver.car_reg }}
+            &middot;
+            {{ driver.seats }} seats
+        </p>
+
+
+        {% if driver.average_rating %}
+        <p>&#9733; {{ driver.average_rating }}</p>
+        {% endif %}
+
+
         <p>
             {% if driver.is_online %}
-            <span class="status-online">&#9679; Available now</span>
+            <span class="status-online">
+                &#9679; Available now
+            </span>
             {% else %}
-            <span class="status-offline">&#9679; Offline</span>
+            <span class="status-offline">
+                &#9679; Offline
+            </span>
             {% endif %}
         </p>
-        <a class="btn-wa" href="{% url 'taxis:direct_request' driver.slug %}">Message {{ driver.full_name }}</a>
-        <a class="btn-secondary" href="{% url 'taxis:whatsapp_redirect' driver.slug %}" target="_blank" rel="noopener nofollow">WhatsApp</a>
-        <a href="{% url 'taxis:driver_profile' driver.slug %}">View profile</a>
+
+
+        <a
+            class="btn-wa"
+            href="{% url 'taxis:direct_request' driver.slug %}"
+        >
+            Message {{ driver.full_name }}
+        </a>
+
+
+        <a
+            class="btn-secondary"
+            href="{% url 'taxis:whatsapp_redirect' driver.slug %}"
+            target="_blank"
+            rel="noopener nofollow"
+        >
+            WhatsApp
+        </a>
+
+
+        <a href="{% url 'taxis:driver_profile' driver.slug %}">
+            View profile
+        </a>
+
     </div>
+
+
     {% empty %}
-    <p>No taxis match those filters right now. Try <a href="{% url 'taxis:request_taxi' %}">requesting any taxi</a> instead.</p>
+
+    <div class="empty-state">
+
+        <h3>No taxis found</h3>
+
+        <p>
+            No taxis match those filters right now.
+        </p>
+
+        <p>
+            <a href="{% url 'taxis:request_taxi' %}">
+                Request Any Taxi
+            </a>
+            instead.
+        </p>
+
+    </div>
+
     {% endfor %}
+
 </div>
+
+
+<section class="driver-promo">
+
+    <h2>Are you a taxi driver?</h2>
+
+    <p>
+        List your taxi on MvurwiTaxis and let passengers find and contact you.
+    </p>
+
+    <p>
+        <strong>Free listing + 3 free leads every month.</strong>
+    </p>
+
+    <a
+        href="{% url 'taxis:driver_signup' %}"
+        class="btn-wa"
+        style="display:inline-block;width:auto;"
+    >
+        List Your Taxi &rarr;
+    </a>
+
+</section>
+
 {% endblock %}
