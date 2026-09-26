@@ -1,5 +1,6 @@
 // ============================================================
 // MvurwiTaxis - Main JavaScript
+// PWA + Web Push Notifications + Sharing + Bookmark Prompt
 // ============================================================
 
 
@@ -12,10 +13,16 @@ if ("serviceWorker" in navigator) {
         navigator.serviceWorker
             .register("/service-worker.js", { scope: "/" })
             .then((registration) => {
-                console.log("Service worker registered:", registration.scope);
+                console.log(
+                    "MvurwiTaxis service worker registered:",
+                    registration.scope
+                );
             })
             .catch((error) => {
-                console.error("Service worker registration failed:", error);
+                console.error(
+                    "MvurwiTaxis service worker registration failed:",
+                    error
+                );
             });
     });
 }
@@ -29,7 +36,6 @@ let deferredInstallPrompt = null;
 
 window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
-
     deferredInstallPrompt = event;
 
     const btn = document.getElementById("install-app-btn");
@@ -41,44 +47,47 @@ window.addEventListener("beforeinstallprompt", (event) => {
 
 function installApp() {
     if (!deferredInstallPrompt) {
+        console.log("No install prompt is currently available.");
         return;
     }
 
     deferredInstallPrompt.prompt();
 
-    deferredInstallPrompt.userChoice
-        .then(() => {
-            deferredInstallPrompt = null;
+    deferredInstallPrompt.userChoice.finally(() => {
+        deferredInstallPrompt = null;
 
-            const btn = document.getElementById("install-app-btn");
+        const btn = document.getElementById("install-app-btn");
 
-            if (btn) {
-                btn.hidden = true;
-            }
-        })
-        .catch((error) => {
-            console.error("Install prompt error:", error);
-            deferredInstallPrompt = null;
-        });
+        if (btn) {
+            btn.hidden = true;
+        }
+    });
 }
 
 
 // ============================================================
-// WEB PUSH NOTIFICATIONS
+// WEB PUSH HELPERS
 // ============================================================
 
 function urlBase64ToUint8Array(base64String) {
-    const padding = "=".repeat(
-        (4 - (base64String.length % 4)) % 4
-    );
+    if (!base64String) {
+        throw new Error("VAPID public key is empty.");
+    }
 
-    const base64 = (
-        base64String + padding
-    )
+    const padding =
+        "=".repeat((4 - (base64String.length % 4)) % 4);
+
+    const base64 = (base64String + padding)
         .replace(/-/g, "+")
         .replace(/_/g, "/");
 
-    const rawData = window.atob(base64);
+    let rawData;
+
+    try {
+        rawData = window.atob(base64);
+    } catch (error) {
+        throw new Error("The VAPID public key is not valid Base64.");
+    }
 
     return Uint8Array.from(
         [...rawData].map((character) => character.charCodeAt(0))
@@ -86,67 +95,82 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 
+// ============================================================
+// ENABLE PUSH NOTIFICATIONS
+// ============================================================
+
 async function enablePushNotifications(button) {
 
-    // --------------------------------------------------------
-    // Browser support checks
-    // --------------------------------------------------------
-
-    if (!("serviceWorker" in navigator)) {
-        alert(
-            "Your browser does not support service workers, " +
-            "so push notifications cannot be enabled."
-        );
-        return;
-    }
-
-    if (!("PushManager" in window)) {
-        alert(
-            "Your browser does not support push notifications."
-        );
-        return;
-    }
-
-    if (!("Notification" in window)) {
-        alert(
-            "Your browser does not support browser notifications."
-        );
-        return;
-    }
-
-
-    // --------------------------------------------------------
-    // Read values supplied by Django
-    // --------------------------------------------------------
-
-    const vapidPublicKey = button.dataset.vapidKey;
-    const csrfToken = button.dataset.csrf;
-
-
-    if (!vapidPublicKey) {
-        console.error("Missing VAPID public key.");
-        alert(
-            "Push notifications are not configured correctly " +
-            "on the server. The VAPID public key is missing."
-        );
-        return;
-    }
-
-    if (!csrfToken) {
-        console.error("Missing CSRF token.");
-        alert(
-            "Security token missing. Please refresh the page " +
-            "and try again."
-        );
-        return;
-    }
-
+    const originalText = button.textContent;
 
     try {
 
-        // ----------------------------------------------------
-        // Ask the browser for notification permission
-        // ----------------------------------------------------
+        console.log("====================================");
+        console.log("Starting push notification setup...");
+        console.log("====================================");
+
+
+        // --------------------------------------------------------
+        // 1. Browser support
+        // --------------------------------------------------------
+
+        button.disabled = true;
+        button.textContent = "Checking notifications...";
+
+        if (!("serviceWorker" in navigator)) {
+            throw new Error(
+                "This browser does not support service workers."
+            );
+        }
+
+        if (!("PushManager" in window)) {
+            throw new Error(
+                "This browser does not support Web Push notifications."
+            );
+        }
+
+        if (!("Notification" in window)) {
+            throw new Error(
+                "This browser does not support browser notifications."
+            );
+        }
+
+
+        // --------------------------------------------------------
+        // 2. Read values from the button
+        // --------------------------------------------------------
+
+        const vapidPublicKey = button.dataset.vapidKey;
+        const csrfToken = button.dataset.csrf;
+
+        console.log(
+            "VAPID public key present:",
+            Boolean(vapidPublicKey)
+        );
+
+        console.log(
+            "CSRF token present:",
+            Boolean(csrfToken)
+        );
+
+        if (!vapidPublicKey) {
+            throw new Error(
+                "VAPID public key is missing from the page."
+            );
+        }
+
+        if (!csrfToken) {
+            throw new Error(
+                "CSRF token is missing from the notification button."
+            );
+        }
+
+
+        // --------------------------------------------------------
+        // 3. Ask for notification permission
+        // --------------------------------------------------------
+
+        button.textContent = "Checking permission...";
 
         let permission = Notification.permission;
 
@@ -155,75 +179,221 @@ async function enablePushNotifications(button) {
             permission
         );
 
-
         if (permission === "default") {
+
+            button.textContent = "Allow notifications...";
 
             permission = await Notification.requestPermission();
 
             console.log(
-                "Notification permission after request:",
+                "Notification permission result:",
                 permission
             );
         }
 
-
         if (permission !== "granted") {
 
-            if (permission === "denied") {
-                alert(
-                    "Notifications are blocked for MvurwiTaxis.\n\n" +
-                    "Open your browser's site settings for " +
-                    "mvurwitaxis.co.zw and allow notifications, " +
-                    "then return here and try again."
-                );
-            } else {
-                alert(
-                    "Notification permission was not granted."
-                );
-            }
-
-            return;
+            throw new Error(
+                "Notification permission is '" +
+                permission +
+                "'. Please allow notifications for mvurwitaxis.co.zw."
+            );
         }
 
 
-        // ----------------------------------------------------
-        // Wait for service worker
-        // ----------------------------------------------------
+        // --------------------------------------------------------
+        // 4. Register service worker
+        // --------------------------------------------------------
 
-        console.log("Waiting for service worker...");
-
-        const registration =
-            await navigator.serviceWorker.ready;
+        button.textContent = "Registering notifications...";
 
         console.log(
-            "Service worker ready:",
+            "Registering /service-worker.js..."
+        );
+
+        const registration =
+            await navigator.serviceWorker.register(
+                "/service-worker.js",
+                {
+                    scope: "/"
+                }
+            );
+
+        console.log(
+            "Service worker registration successful:",
             registration
         );
 
 
-        // ----------------------------------------------------
-        // Check for an existing subscription
-        // ----------------------------------------------------
+        // --------------------------------------------------------
+        // 5. Wait for service worker to become active
+        // --------------------------------------------------------
+
+        button.textContent = "Starting notification service...";
+
+        if (!registration.active) {
+
+            console.log(
+                "Service worker is not active yet."
+            );
+
+            await new Promise((resolve, reject) => {
+
+                const timeout = setTimeout(() => {
+
+                    reject(
+                        new Error(
+                            "Service worker did not become active within 15 seconds."
+                        )
+                    );
+
+                }, 15000);
+
+
+                // Service worker is installing
+                if (registration.installing) {
+
+                    const worker = registration.installing;
+
+                    console.log(
+                        "Service worker state:",
+                        worker.state
+                    );
+
+                    const checkState = () => {
+
+                        console.log(
+                            "Service worker state:",
+                            worker.state
+                        );
+
+                        if (worker.state === "activated") {
+
+                            clearTimeout(timeout);
+                            resolve();
+
+                        } else if (worker.state === "redundant") {
+
+                            clearTimeout(timeout);
+
+                            reject(
+                                new Error(
+                                    "Service worker became redundant."
+                                )
+                            );
+                        }
+                    };
+
+                    worker.addEventListener(
+                        "statechange",
+                        checkState
+                    );
+
+                    // It may have changed before listener attached.
+                    checkState();
+
+                }
+
+                // Service worker waiting
+                else if (registration.waiting) {
+
+                    const worker = registration.waiting;
+
+                    console.log(
+                        "Service worker is waiting."
+                    );
+
+                    const checkState = () => {
+
+                        console.log(
+                            "Waiting service worker state:",
+                            worker.state
+                        );
+
+                        if (worker.state === "activated") {
+
+                            clearTimeout(timeout);
+                            resolve();
+
+                        } else if (worker.state === "redundant") {
+
+                            clearTimeout(timeout);
+
+                            reject(
+                                new Error(
+                                    "Waiting service worker became redundant."
+                                )
+                            );
+                        }
+                    };
+
+                    worker.addEventListener(
+                        "statechange",
+                        checkState
+                    );
+
+                    checkState();
+
+                }
+
+                else {
+
+                    clearTimeout(timeout);
+
+                    reject(
+                        new Error(
+                            "Service worker could not be installed."
+                        )
+                    );
+                }
+
+            });
+        }
+
+
+        // --------------------------------------------------------
+        // 6. Get existing subscription
+        // --------------------------------------------------------
+
+        button.textContent = "Checking subscription...";
+
+        console.log(
+            "Getting existing push subscription..."
+        );
 
         let subscription =
             await registration.pushManager.getSubscription();
 
 
-        // ----------------------------------------------------
-        // Create a new subscription if necessary
-        // ----------------------------------------------------
+        // --------------------------------------------------------
+        // 7. Create subscription if necessary
+        // --------------------------------------------------------
 
         if (!subscription) {
 
+            button.textContent =
+                "Creating notification subscription...";
+
             console.log(
-                "No existing push subscription. Creating one..."
+                "No existing subscription found."
+            );
+
+            console.log(
+                "Creating new push subscription..."
+            );
+
+            const applicationServerKey =
+                urlBase64ToUint8Array(vapidPublicKey);
+
+            console.log(
+                "VAPID key converted successfully."
             );
 
             subscription =
                 await registration.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey:
-                        urlBase64ToUint8Array(vapidPublicKey),
+                        applicationServerKey
                 });
 
         } else {
@@ -240,9 +410,16 @@ async function enablePushNotifications(button) {
         );
 
 
-        // ----------------------------------------------------
-        // Send subscription to Django
-        // ----------------------------------------------------
+        // --------------------------------------------------------
+        // 8. Send subscription to Django
+        // --------------------------------------------------------
+
+        button.textContent =
+            "Saving notification settings...";
+
+        console.log(
+            "Sending subscription to Django..."
+        );
 
         const response = await fetch(
             "/push/subscribe/",
@@ -251,62 +428,60 @@ async function enablePushNotifications(button) {
 
                 headers: {
                     "Content-Type": "application/json",
-                    "X-CSRFToken": csrfToken,
+                    "X-CSRFToken": csrfToken
                 },
+
+                credentials: "same-origin",
 
                 body: JSON.stringify(
                     subscription.toJSON()
-                ),
+                )
             }
         );
 
 
-        // ----------------------------------------------------
-        // Handle server response
-        // ----------------------------------------------------
+        const responseText =
+            await response.text();
+
+
+        console.log(
+            "Django response:",
+            response.status,
+            responseText
+        );
+
 
         if (!response.ok) {
 
-            let serverMessage = "";
-
-            try {
-                serverMessage = await response.text();
-            } catch (error) {
-                console.error(
-                    "Could not read server response:",
-                    error
-                );
-            }
-
-            console.error(
-                "Push subscription request failed:",
-                response.status,
-                serverMessage
-            );
-
             throw new Error(
-                `Server rejected the subscription ` +
-                `(${response.status}). ${serverMessage}`
+                "Server rejected the subscription (" +
+                response.status +
+                "): " +
+                responseText
             );
         }
 
 
-        console.log(
-            "Push subscription successfully saved."
-        );
+        // --------------------------------------------------------
+        // 9. Success
+        // --------------------------------------------------------
 
+        button.textContent =
+            "Notifications enabled";
 
-        // ----------------------------------------------------
-        // Update button
-        // ----------------------------------------------------
-
-        button.textContent = "Notifications enabled";
         button.disabled = true;
 
+        console.log(
+            "===================================="
+        );
 
-        // ----------------------------------------------------
-        // Success message
-        // ----------------------------------------------------
+        console.log(
+            "Push notifications enabled successfully."
+        );
+
+        console.log(
+            "===================================="
+        );
 
         alert(
             "Notifications enabled successfully."
@@ -314,27 +489,29 @@ async function enablePushNotifications(button) {
 
     } catch (error) {
 
-        // ----------------------------------------------------
-        // IMPORTANT:
-        // Show the REAL error instead of hiding it.
-        // ----------------------------------------------------
+        console.error(
+            "===================================="
+        );
 
         console.error(
-            "Push notification error:",
+            "PUSH NOTIFICATION ERROR:",
             error
         );
 
+        console.error(
+            "===================================="
+        );
 
-        let message =
-            error && error.message
-                ? error.message
-                : String(error);
+
+        // Restore button
+        button.disabled = false;
+
+        button.textContent = originalText;
 
 
         alert(
-            "Couldn't enable notifications.\n\n" +
-            "Error: " +
-            message
+            "Push notification setup failed:\n\n" +
+            error.message
         );
     }
 }
@@ -346,29 +523,40 @@ async function enablePushNotifications(button) {
 
 function copyShareText(text) {
 
+    if (!navigator.clipboard) {
+
+        alert(
+            "Copy is not supported by this browser."
+        );
+
+        return;
+    }
+
     navigator.clipboard
         .writeText(text)
         .then(() => {
+
             alert(
                 "Copied! Paste it into your WhatsApp Status or a group."
             );
+
         })
         .catch((error) => {
 
             console.error(
-                "Clipboard error:",
+                "Copy failed:",
                 error
             );
 
             alert(
-                "Couldn't copy the text."
+                "Couldn't copy the text. Please copy it manually."
             );
         });
 }
 
 
 // ============================================================
-// BOOKMARK PROMPT
+// BOOKMARK / INSTALL PROMPT
 // ============================================================
 
 (function initBookmarkPrompt() {
@@ -383,13 +571,12 @@ function copyShareText(text) {
     const SHOW_AFTER_MS = 12000;
 
 
-    // Driver-only pages:
-    // drivers already return via login, don't nag them.
+    // Driver-only pages should not show the prompt.
     const SKIP_PATH_PREFIXES = [
         "/dashboard/",
         "/login/",
         "/signup/",
-        "/admin",
+        "/admin"
     ];
 
 
@@ -407,9 +594,12 @@ function copyShareText(text) {
 
     function isDismissed() {
 
-        const until = Number(
-            localStorage.getItem(DISMISS_KEY) || 0
-        );
+        const until =
+            Number(
+                localStorage.getItem(
+                    DISMISS_KEY
+                ) || 0
+            );
 
         return Date.now() < until;
     }
@@ -419,7 +609,11 @@ function copyShareText(text) {
 
         const until =
             Date.now() +
-            days * 24 * 60 * 60 * 1000;
+            days *
+            24 *
+            60 *
+            60 *
+            1000;
 
         try {
 
@@ -431,7 +625,7 @@ function copyShareText(text) {
         } catch (error) {
 
             console.warn(
-                "Could not save bookmark prompt state:",
+                "Could not save bookmark prompt preference:",
                 error
             );
         }
@@ -454,16 +648,25 @@ function copyShareText(text) {
 
 
         if (isIOS) {
+
             return "Tap Share, then \"Add to Home Screen\".";
+
         }
+
 
         if (isAndroid) {
-            return "Tap the menu (\u22ee), then \"Add to Home screen\".";
+
+            return "Tap the menu (⋮), then \"Add to Home screen\".";
+
         }
 
+
         if (isMac) {
+
             return "Press Cmd+D to bookmark this page.";
+
         }
+
 
         return "Press Ctrl+D to bookmark this page.";
     }
@@ -477,6 +680,7 @@ function copyShareText(text) {
                 document.getElementById(
                     "bookmark-prompt"
                 );
+
 
             if (!banner) {
                 return;
@@ -493,6 +697,7 @@ function copyShareText(text) {
                         path.startsWith(prefix)
                 )
             ) {
+
                 return;
             }
 
@@ -501,26 +706,38 @@ function copyShareText(text) {
                 isStandalone() ||
                 isDismissed()
             ) {
+
                 return;
             }
 
 
-            window.setTimeout(() => {
+            window.setTimeout(
+                () => {
 
-                const hint =
-                    document.getElementById(
-                        "bookmark-prompt-hint"
-                    );
+                    const hint =
+                        document.getElementById(
+                            "bookmark-prompt-hint"
+                        );
 
-                if (hint) {
-                    hint.textContent =
-                        hintText();
-                }
 
-                banner.hidden = false;
+                    if (hint) {
 
-            }, SHOW_AFTER_MS);
+                        hint.textContent =
+                            hintText();
 
+                    }
+
+
+                    banner.hidden = false;
+
+                },
+                SHOW_AFTER_MS
+            );
+
+
+            // ----------------------------------------------------
+            // Not now
+            // ----------------------------------------------------
 
             const dismissBtn =
                 document.getElementById(
@@ -544,6 +761,10 @@ function copyShareText(text) {
             }
 
 
+            // ----------------------------------------------------
+            // Got it / Install
+            // ----------------------------------------------------
+
             const acceptBtn =
                 document.getElementById(
                     "bookmark-prompt-accept"
@@ -556,8 +777,12 @@ function copyShareText(text) {
                     "click",
                     () => {
 
-                        if (deferredInstallPrompt) {
+                        if (
+                            deferredInstallPrompt
+                        ) {
+
                             installApp();
+
                         }
 
                         banner.hidden = true;
@@ -568,6 +793,7 @@ function copyShareText(text) {
                     }
                 );
             }
+
         }
     );
 
