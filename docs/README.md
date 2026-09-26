@@ -1,27 +1,41 @@
-# MvurwiTaxis — 14-Day Driver Marketing Pack v2
+# MvurwiTaxis — 14-Day Driver Recruitment Campaign
 
-Created around the current MvurwiTaxis product:
-- 5 taxis currently listed
-- Passenger directory
-- Direct driver messaging
-- WhatsApp contact
-- Request Any Taxi
-- Hot Leads
-- Go Online / availability
-- Push/email notifications
-- Verified driver status
-- Free driver listing
-- 3 free leads/month
-- Pro: $3/week or $10/month
+This pack is for the next fortnight while MvurwiTaxis moves from 5 registered drivers toward the Phase A target of 15–20 drivers.
 
-## Files
-01_14_day_campaign.md — strategy and daily execution
-02_14_day_post_copy.md — ready-to-post copy
-03_driver_dm_variants.md — direct recruitment messages
-04_whatsapp_status_bank.md — short status posts
-05_homepage_messaging.md — homepage hero recommendation
-06_social_graphic_explained.md — explanation of social graphics
-PNG files — 10 posters + 2 infographics
+## Campaign objective
 
-## Brand direction
-Use the dark background + lime/green accent style visible in the current MvurwiTaxis homepage screenshot. Keep the actual product claims accurate and avoid promising guaranteed passenger volume or income.
+- Current base: 5 registered drivers
+- Minimum Phase A milestone: 15 drivers
+- Stretch target: 20 drivers
+- Primary objective: recruit and activate 10–15 additional drivers
+- Secondary objective: collect proof (profiles, testimonials, screenshots) that can support the later passenger campaign
+
+## Core message
+
+**Be one of the first 20 taxis on MvurwiTaxis.**
+
+The campaign deliberately rotates different angles rather than repeating the same advert:
+
+1. First 20 / early-mover angle
+2. Free listing / low-risk angle
+3. Visibility / one-link angle
+4. Real drivers already registered
+5. Referral angle
+6. WhatsApp convenience
+7. Product demonstration
+8. Local Mvurwi identity
+9. Driver story/testimonial
+10. Progress toward 20
+
+## Recommended rhythm
+
+- 1 main WhatsApp Status/post per day
+- 3–5 direct driver conversations per day
+- Follow up with warm prospects after 2–3 days
+- Ask existing drivers for referrals twice during the fortnight
+- Do not spam the same WhatsApp group with the same advert
+- Keep passenger-heavy promotion limited until the directory can support it
+
+## Important
+
+Use only claims that are currently true. Replace [X] with the actual driver count before posting. Do not promise passenger demand, earnings, guaranteed jobs, or guaranteed leads unless the platform can genuinely support that claim.

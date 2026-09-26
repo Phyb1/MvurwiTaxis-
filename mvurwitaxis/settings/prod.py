@@ -36,3 +36,9 @@ CSRF_COOKIE_SECURE = True
 SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=3600)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 X_FRAME_OPTIONS = "DENY"
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://mvurwitaxis.co.zw",
+    "https://www.mvurwitaxis.co.zw",
+]
+
